@@ -1,0 +1,66 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:6732711853075574666",
+      "lastPropertyId": "4:7503063410440128918",
+      "name": "Post",
+      "properties": [
+        {
+          "id": "1:8595625441923346451",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:9156226567024795369",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "3:8530573926482056597",
+          "name": "embedding",
+          "type": 28
+        },
+        {
+          "id": "4:7503063410440128918",
+          "name": "timestamp",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:660998405971647853",
+      "lastPropertyId": "2:6497640399848300033",
+      "name": "UserLikeVector",
+      "properties": [
+        {
+          "id": "1:4167710637882031195",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6497640399848300033",
+          "name": "vector",
+          "type": 28
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "2:660998405971647853",
+  "lastIndexId": "0:0",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
