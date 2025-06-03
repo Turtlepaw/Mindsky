@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.runtime.livedata)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -71,4 +72,12 @@ dependencies {
     implementation(libs.core)
     ksp(libs.ksp)
     implementation(libs.bottom.sheet)
+    implementation(files("libs/sentence_embeddings.aar"))
+    implementation(files("libs/model2vec.aar"))
+
+    implementation(libs.okhttp)
+    api(libs.bluesky)
+    implementation(libs.gson)
+    implementation(libs.androidx.security.crypto)
+    //implementation(project(":atproto-authentication"))
 }

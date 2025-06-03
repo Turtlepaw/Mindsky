@@ -4,4 +4,5 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     id("io.objectbox") version "4.3.0" apply false
+    alias(libs.plugins.android.library) apply false
 }
