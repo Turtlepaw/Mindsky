@@ -1,7 +1,5 @@
 import org.gradle.kotlin.dsl.flatDir
 
-include(":atproto-authentication")
-
 
 pluginManagement {
     resolutionStrategy {
