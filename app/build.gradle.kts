@@ -80,4 +80,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.androidx.security.crypto)
     //implementation(project(":atproto-authentication"))
+
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }

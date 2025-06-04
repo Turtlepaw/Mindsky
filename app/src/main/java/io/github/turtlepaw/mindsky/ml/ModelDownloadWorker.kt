@@ -59,7 +59,6 @@ class ModelDownloadWorker(
     override suspend fun doWork(): Result {
         val stageName = inputData.getString(KEY_STAGE) ?: DownloadStage.Model.name
         val stage = DownloadStage.valueOf(stageName)
-        Log.d("ModelDownloadWorker", "Downloading $stage")
         setProgress(workDataOf("progress" to 0, "stage" to stage.name))
 
         if(stage == DownloadStage.Tokenizer){

@@ -36,6 +36,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.ml.DownloadStage
 import io.github.turtlepaw.mindsky.ml.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
+import kotlinx.coroutines.delay
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -63,7 +64,6 @@ fun DownloadModel(navigator: DestinationsNavigator) {
             }
 
             if (runningWork == null || runningWork.state.isFinished) {
-                // All finished, navigate away
                 navigator.replaceCurrent(FeedDestination)
                 workId.value = null
             } else {
@@ -86,20 +86,6 @@ fun DownloadModel(navigator: DestinationsNavigator) {
         } catch (_: IllegalArgumentException) {
             null
         }
-    }
-
-    LaunchedEffect(
-        stage,
-        stageString
-    ) {
-        Log.d("DownloadModel", "stage: $stage, stageString: $stageString (${workInfo?.progress?.getString("stage")} -> $stageString)")
-    }
-
-    LaunchedEffect(
-        key1 = workInfo?.state,
-        key2 = progress,
-    ) {
-        Log.d("DownloadModel", "workInfo: $workInfo, progress: $progress")
     }
 
     Scaffold { padding ->
