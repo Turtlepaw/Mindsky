@@ -1,11 +1,11 @@
-package io.github.turtlepaw.mindsky.ml
+package io.github.turtlepaw.mindsky.logic
 
 import android.content.Context
 import com.ml.shubham0204.sentence_embeddings.SentenceEmbedding
 import java.io.File
 
 class PostEmbedder(val context: Context) {
-    suspend fun getModel(): SentenceEmbedding {
+    private suspend fun getModel(): SentenceEmbedding {
         val sentenceEmbedding = SentenceEmbedding()
 
         val modelFile = File(context.filesDir, ModelDownloadWorker.MODEL_FILENAME)

@@ -1,4 +1,4 @@
-package io.github.turtlepaw.mindsky.ml
+package io.github.turtlepaw.mindsky.logic
 
 import io.github.turtlepaw.mindsky.Post
 import kotlin.math.sqrt

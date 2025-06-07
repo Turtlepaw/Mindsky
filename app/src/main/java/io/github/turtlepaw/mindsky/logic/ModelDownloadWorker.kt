@@ -1,8 +1,7 @@
-package io.github.turtlepaw.mindsky.ml
+package io.github.turtlepaw.mindsky.logic
 
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import androidx.work.*
 import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
