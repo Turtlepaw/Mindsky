@@ -43,6 +43,7 @@ class MindskyApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         Log.d("MindskyApplication", "onCreate")
+        ObjectBox.init(this)
         val sessionManager = SessionManager(this)
         val currentSession = sessionManager.getSession()
         if (currentSession != null) {

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column // Added
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -37,8 +38,12 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab // Added
+import androidx.compose.material3.PrimaryTabRow // Changed from TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -72,6 +77,10 @@ class FeedViewModelFactory(private val api: BlueskyApi) : ViewModelProvider.Fact
     }
 }
 
+enum class FeedDestination(val title: String? = null) {
+    Following, ForYou("For You")
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Destination<RootGraph>(start = true)
 @Composable
@@ -88,13 +97,16 @@ fun Feed(nav: DestinationsNavigator) {
     val isFetchingFromViewModel = viewModel.isFetchingFeed.value // Use ViewModel's state
     val error = viewModel.error.value
 
-    LaunchedEffect(Unit) {
-        if (viewModel.feed.value == null && !viewModel.isFetchingFeed.value) {
-            Log.d("Feed", "LaunchedEffect(Unit): Feed is null and not fetching, calling fetchFeed()")
-            viewModel.fetchFeed() // Initial fetch
-        } else {
-            Log.d("Feed", "LaunchedEffect(Unit): Feed already available or fetching. Feed items: ${viewModel.feed.value?.size}, Fetching: ${viewModel.isFetchingFeed.value}")
-        }
+    val startDestination = FeedDestination.Following
+    var selectedDestination by rememberSaveable { mutableIntStateOf(startDestination.ordinal) }
+
+    // Updated LaunchedEffect to react to selectedDestination changes
+    LaunchedEffect(selectedDestination, viewModel) {
+        Log.d("Feed", "LaunchedEffect for selectedDestination: ${FeedDestination.values()[selectedDestination]}. Requesting fetch.")
+        // USER ACTION REQUIRED in ViewModel:
+        // viewModel.fetchFeed() must be adapted to fetch data based on the current
+        // FeedDestination.values()[selectedDestination].
+        viewModel.fetchFeed()
     }
 
     LaunchedEffect(feed, isFetchingFromViewModel) {
@@ -117,11 +129,9 @@ fun Feed(nav: DestinationsNavigator) {
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            if(error != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+            // Error and Loading states for the feed
+            if (error != null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "Error fetching feed: $error",
                         color = MaterialTheme.colorScheme.error,
@@ -129,59 +139,80 @@ fun Feed(nav: DestinationsNavigator) {
                     )
                 }
             } else if (feed == null && isFetchingFromViewModel) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     LinearWavyProgressIndicator()
                 }
             } else if (feed != null) {
+                // Feed content (LazyColumn)
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .zIndex(1f),
+                        .zIndex(1f), // Base layer for scrolling content
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     item {
-                        Spacer(modifier = Modifier.height(50.dp))
+                        // Spacer for fixed TopBarInteractiveElements (approx. 56dp)
+                        Spacer(modifier = Modifier.height(56.dp))
+                    }
+                    item { // PrimaryTabRow is now an item in LazyColumn
+                        val tabTitles = remember { FeedDestination.entries.map { it.title ?: it.name } }
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedDestination,
+                        ) {
+                            tabTitles.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedDestination == index,
+                                    onClick = {
+                                        if (selectedDestination != index) {
+                                            selectedDestination = index
+                                            Log.d("Feed", "Tab selected: ${FeedDestination.values()[index]}. ViewModel logic needs update.")
+                                            viewModel.fetchFeed()
+                                        }
+                                    },
+                                    text = { Text(title) }
+                                )
+                            }
+                        }
                     }
                     items(feed) {
-                        PostView(
-                            feedViewPost = it,
-                            nav
-                        )
+                        PostView(feedViewPost = it, nav)
                     }
                 }
             }
 
+            // TopBarBackground - zIndex(2f)
             TopBarBackground(
-                modifier = Modifier.zIndex(3f)
+                modifier = Modifier.zIndex(2f) // Above scrolling content
             )
 
-            TopBarButtons(listState, nav)
-
-            TopBarInteractiveElements(
-                listState = listState,
-                onIconClick = {
-                    val currentTime = System.currentTimeMillis()
-                    if (isFetchingFromViewModel) {
-                        Log.d("Feed", "Already fetching feed, click ignored.")
-                    } else if (currentTime - lastFetchTime < 5000) {
-                        Log.d("Feed", "Fetched too recently, click ignored. Cooldown active.")
-                    } else {
-                        Log.d("Feed", "Requesting feed fetch.")
-                        lastFetchTime = currentTime
-                        // Fetch logic now directly calls ViewModel
-                        try {
+            // Column for TopBarInteractiveElements - zIndex(3f)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .zIndex(3f) // Above TopBarBackground
+            ) {
+                TopBarInteractiveElements(
+                    listState = listState,
+                    onIconClick = {
+                        val currentTime = System.currentTimeMillis()
+                        if (isFetchingFromViewModel) {
+                            Log.d("Feed", "Already fetching feed, click ignored.")
+                        } else if (currentTime - lastFetchTime < 5000) {
+                            Log.d("Feed", "Fetched too recently, click ignored. Cooldown active.")
+                        } else {
+                            Log.d("Feed", "Requesting feed refresh for: ${FeedDestination.values()[selectedDestination]}")
+                            lastFetchTime = currentTime
                             viewModel.fetchFeed()
-                        } catch (e: Exception) {
-                            Log.e("Feed", "Error starting feed fetch", e)
                         }
-                    }
-                },
-                modifier = Modifier.zIndex(3f)
-            )
+                    },
+                    modifier = Modifier
+                )
+            }
+
+            // TopBarButtons (settings icon) uses internal zIndex(5f)
+            TopBarButtons(listState, nav)
         }
     }
 }

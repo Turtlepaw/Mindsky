@@ -1,6 +1,6 @@
 package io.github.turtlepaw.mindsky.logic
 
-import io.github.turtlepaw.mindsky.Post
+import io.github.turtlepaw.mindsky.EmbeddedPost
 import kotlin.math.sqrt
 
 class FeedRanker {
@@ -17,7 +17,7 @@ class FeedRanker {
         return (1.0 / (1.0 + hoursAgo)).toFloat() // e.g. 1.0 if now, 0.5 if 1 hour ago, etc.
     }
 
-    fun rankPosts(posts: List<Post>, userVector: FloatArray): List<Post> {
+    fun rankPosts(posts: List<EmbeddedPost>, userVector: FloatArray): List<EmbeddedPost> {
         return posts.sortedByDescending { post ->
             val similarity = cosineSimilarity(post.embedding, userVector)
             val decay = decayFactor(post.timestamp)

@@ -7,6 +7,7 @@ import app.bsky.feed.FeedViewPost
 import app.bsky.feed.GetFeedQueryParams
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.Post
+import io.github.turtlepaw.mindsky.EmbeddedPost
 import io.github.turtlepaw.mindsky.ObjectBox
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.ktor.client.HttpClient
@@ -105,7 +106,15 @@ class FeedWorker(
             val totalPosts = familiarFeed.size
 
             var embeddings = mutableListOf<FloatArray>()
-            val objectBox = ObjectBox.init(applicationContext)
+            val objectBox = if (ObjectBox.store == null) {
+                ObjectBox.init(applicationContext)
+            } else {
+                ObjectBox.store
+            }
+            val postEmbedderBox = objectBox.boxFor(EmbeddedPost::class.java)
+
+            // clear existing posts
+            postEmbedderBox.removeAll()
 
             for ((index, feedViewPost) in familiarFeed.withIndex()) {
                 val progress = (index + 1) * 100 / totalPosts
@@ -113,9 +122,16 @@ class FeedWorker(
                 val post = postView.record.decodeAs<Post>()
                 val embedding = postEmbedder.encode(post.text)
                 Log.d("FeedWorker", "${post.text} = ${embedding.joinToString(prefix = "[", postfix = "]")}")
-                objectBox.
-
-                embeddings.add(embedding)
+                postEmbedderBox.put(
+                    EmbeddedPost(
+                        uri = postView.uri.atUri,
+                        text = post.text,
+                        embedding = embedding,
+                        authorDid = postView.author.did.did,
+                        timestamp = post.createdAt.epochSeconds,
+                        score = 0f
+                    )
+                )
                 setProgress(workDataOf("progress" to progress))
             }
 
