@@ -15,7 +15,8 @@ class PostEmbedder(val context: Context) {
         sentenceEmbedding.init(
             modelFilepath = modelFile.absolutePath,
             tokenizerBytes = tokenizerBytes,
-            useTokenTypeIds = false,
+            useTokenTypeIds = true,
+
             outputTensorName = "sentence_embedding",
             useFP16 = false,
             useXNNPack = false,

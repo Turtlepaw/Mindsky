@@ -83,4 +83,9 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.ktor.client.okhttp)
+
+    implementation(libs.ktor.client.logging)
+
+    implementation(libs.onnxruntime.android)
 }

@@ -27,7 +27,9 @@ fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
         Row(modifier = Modifier.weight(1f)) { // Added weight here
             Text(
                 text = author.displayName ?: author.handle.handle,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -45,7 +47,7 @@ fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
 
             Text(
                 text = "@${author.handle.handle}",
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Normal
                 ),
                 maxLines = 1,
@@ -57,11 +59,10 @@ fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
 
         Text(
             text = timestamp.toRelativeTimeString(),
-            style = MaterialTheme.typography.titleMedium.copy(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.titleSmall.copy(
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 fontWeight = FontWeight.Normal
             )
-            // No weight, so it takes its intrinsic width
         )
     }
 }

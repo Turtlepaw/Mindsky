@@ -4,5 +4,6 @@ data class UserSession(
     val did: String,
     val handle: String,
     val accessToken: String,
-    val refreshToken: String
+    val refreshToken: String,
+    val host: String
 )

@@ -3,11 +3,15 @@ package io.github.turtlepaw.mindsky
 import io.objectbox.annotation.*
 
 @Entity
-data class Post(
+data class EmbeddedPost(
     @Id var id: Long = 0,
-    var content: String,
-    var embedding: FloatArray, // This is supported by ObjectBox!
-    var timestamp: Long
+    val uri: String, // Post URI
+    val text: String,
+    val embedding: FloatArray,
+    val authorDid: String,
+    val timestamp: Long,
+    val liked: Boolean = false,
+    val score: Float? = null, // Similarity score, optional
 )
 
 @Entity

@@ -4,35 +4,6 @@
   "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
   "entities": [
     {
-      "id": "1:6732711853075574666",
-      "lastPropertyId": "4:7503063410440128918",
-      "name": "Post",
-      "properties": [
-        {
-          "id": "1:8595625441923346451",
-          "name": "id",
-          "type": 6,
-          "flags": 1
-        },
-        {
-          "id": "2:9156226567024795369",
-          "name": "content",
-          "type": 9
-        },
-        {
-          "id": "3:8530573926482056597",
-          "name": "embedding",
-          "type": 28
-        },
-        {
-          "id": "4:7503063410440128918",
-          "name": "timestamp",
-          "type": 6
-        }
-      ],
-      "relations": []
-    },
-    {
       "id": "2:660998405971647853",
       "lastPropertyId": "2:6497640399848300033",
       "name": "UserLikeVector",
@@ -50,17 +21,73 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "3:7862629760209910114",
+      "lastPropertyId": "8:5655011999882198536",
+      "name": "EmbeddedPost",
+      "properties": [
+        {
+          "id": "1:5987793139981280312",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4357748076015854341",
+          "name": "uri",
+          "type": 9
+        },
+        {
+          "id": "3:2973293132454607496",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "4:2166940025602037549",
+          "name": "embedding",
+          "type": 28
+        },
+        {
+          "id": "5:3828405016924875802",
+          "name": "authorDid",
+          "type": 9
+        },
+        {
+          "id": "6:3142824067167137866",
+          "name": "timestamp",
+          "type": 6
+        },
+        {
+          "id": "7:7541743499169268150",
+          "name": "liked",
+          "type": 1
+        },
+        {
+          "id": "8:5655011999882198536",
+          "name": "score",
+          "type": 7
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "2:660998405971647853",
+  "lastEntityId": "3:7862629760209910114",
   "lastIndexId": "0:0",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
   "modelVersionParserMinimum": 5,
-  "retiredEntityUids": [],
+  "retiredEntityUids": [
+    6732711853075574666
+  ],
   "retiredIndexUids": [],
-  "retiredPropertyUids": [],
+  "retiredPropertyUids": [
+    8595625441923346451,
+    9156226567024795369,
+    8530573926482056597,
+    7503063410440128918
+  ],
   "retiredRelationUids": [],
   "version": 1
 }
