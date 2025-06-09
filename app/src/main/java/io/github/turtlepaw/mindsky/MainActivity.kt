@@ -15,11 +15,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember // Keep this
 import androidx.compose.ui.platform.LocalContext // Added
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 import com.ramcosta.composedestinations.animations.defaults.DefaultFadingTransitions
@@ -82,6 +86,7 @@ object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
 
 class MainActivity : ComponentActivity() {
 
+    @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -100,6 +105,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val rememberedSessionManager = remember { sessionManager }
+            val notifications = rememberPermissionState(
+                android.Manifest.permission.POST_NOTIFICATIONS
+            )
+
+            LaunchedEffect(Unit) {
+                if (!notifications.status.isGranted) {
+                    notifications.launchPermissionRequest()
+                }
+            }
 
             // Get API and authTokensFlow from MindskyApplication
             val blueskyApi = mindskyApplication.blueskyApi

@@ -6,18 +6,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.bsky.feed.FeedViewPost
+import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.GetTimelineQueryParams
+import app.bsky.feed.PostView
 import kotlinx.coroutines.launch
 import sh.christian.ozone.BlueskyApi
+import sh.christian.ozone.api.AtUri
 
 class FeedViewModel(
     private val api: BlueskyApi
 ) : ViewModel() {
 
-    var feed = mutableStateOf<List<FeedViewPost>?>(null)
+    var followingFeed = mutableStateOf<List<FeedViewPost>?>(null)
         private set
 
     var isFetchingFeed = mutableStateOf(false)
+        private set
+
+    var forYouFeed = mutableStateOf<List<PostView>?>(null)
         private set
 
     var error = mutableStateOf<String?>(null)
@@ -26,15 +32,15 @@ class FeedViewModel(
     private var lastFetchTime = 0L
 
     init {
-        fetchFeed() // Fetch feed when ViewModel is created
+        fetchFeed()
     }
 
     fun fetchFeed(limit: Long = 100) {
         // 1. If feed data already exists, don't re-fetch
-        if (feed.value != null) {
-            Log.d("FeedVM", "Feed already loaded, skipping fetch.")
-            return
-        }
+//        if (feed.value != null) {
+//            Log.d("FeedVM", "Feed already loaded, skipping fetch.")
+//            return
+//        }
 
         // 2. If already fetching, don't start another fetch
         if (isFetchingFeed.value) {
@@ -53,16 +59,9 @@ class FeedViewModel(
             try {
                 isFetchingFeed.value = true
                 lastFetchTime = now
-                Log.d("FeedVM", "Fetching feed...")
-                Log.d("FeedVM", "Calling api.getTimeline with limit: $limit")
-                val timelineResponse = api.getTimeline(GetTimelineQueryParams(limit = limit))
-                Log.d("FeedVM", "Got timelineResponse, calling .maybeResponse()")
-                val maybeResult = timelineResponse.maybeResponse()
-                Log.d("FeedVM", "Got maybeResult, accessing .feed")
-                val result = maybeResult?.feed
-                Log.d("FeedVM", "Accessed .feed, result is: ${if (result == null) "null" else "not null, size: " + result.size}")
-                feed.value = result
-                Log.d("FeedVM", "Feed value set. Feed fetched size: ${result?.size}")
+                Log.d("FeedVM", "Fetching following feed...")
+                fetchFollowing()
+                fetchForYou()
             } catch (e: Exception) {
                 Log.e("FeedVM", "Error fetching feed in ViewModel (Exception)", e)
                 error.value = "Failed to fetch feed: ${e.message}" // Set error state
@@ -74,5 +73,29 @@ class FeedViewModel(
                 isFetchingFeed.value = false
             }
         }
+    }
+
+    suspend fun fetchFollowing(limit: Long = 100) {
+        val timelineResponse = api.getTimeline(GetTimelineQueryParams(limit = limit))
+        val maybeResult = timelineResponse.maybeResponse()
+        val result = maybeResult?.feed
+        followingFeed.value = result
+    }
+
+    suspend fun fetchForYou(limit: Long = 100) {
+        val posts = ObjectBox.store.boxFor(EmbeddedPost::class.java).all
+        if (posts.isEmpty()) {
+            Log.d("FeedVM", "No posts found in ObjectBox, fetching from API.")
+            forYouFeed.value = emptyList()
+            return
+        }
+        val postRecords = api.getPosts(
+            GetPostsQueryParams(
+                uris = posts.map {
+                    AtUri(it.uri)
+                },
+            )
+        ).maybeResponse()
+        forYouFeed.value = postRecords?.posts
     }
 }

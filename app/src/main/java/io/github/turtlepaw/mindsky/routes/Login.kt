@@ -143,7 +143,7 @@ fun Login(navigator: DestinationsNavigator) {
                                     )
 
                                     val application = context.applicationContext as MindskyApplication
-                                    application.updateBlueskyApi(newSession)
+                                    application.configureAuthenticatedApi(newSession)
                                     Log.i("LoginRoute", "Global API client update initiated for host: ${newSession.host}")
 
                                     isLoading = false

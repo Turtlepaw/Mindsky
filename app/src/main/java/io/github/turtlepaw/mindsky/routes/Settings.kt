@@ -23,6 +23,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.logic.FeedWorker
+import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -55,11 +56,7 @@ fun Settings(navigator: DestinationsNavigator) {
             item {
                 Button(
                     onClick = {
-                        WorkManager.getInstance(context).enqueueUniqueWork(
-                            FeedWorker.WORK_NAME,
-                            ExistingWorkPolicy.REPLACE,
-                            FeedWorker.buildWorkRequest()
-                        )
+                        WorkManager.getInstance(context).enqueueFeedWorkers()
                     }
                 ) {
                     Text("Launch embedding")

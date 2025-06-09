@@ -1,15 +1,19 @@
 package io.github.turtlepaw.mindsky.routes
 
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -31,9 +35,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,16 +60,21 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.work.ExistingWorkPolicy
+import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.FeedViewModel
-import io.github.turtlepaw.mindsky.components.PostView
+import io.github.turtlepaw.mindsky.components.post.PostView
 import io.github.turtlepaw.mindsky.components.TopBarBackground
 import io.github.turtlepaw.mindsky.components.TopBarInteractiveElements
+import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
+import io.github.turtlepaw.mindsky.logic.FeedWorker
+import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
 import sh.christian.ozone.BlueskyApi
@@ -93,7 +106,9 @@ fun Feed(nav: DestinationsNavigator) {
 
     val viewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(api))
 
-    val feed = viewModel.feed.value
+    val followingFeedData = viewModel.followingFeed.value
+    val forYouFeedData = viewModel.forYouFeed.value
+
     val isFetchingFromViewModel = viewModel.isFetchingFeed.value // Use ViewModel's state
     val error = viewModel.error.value
 
@@ -107,10 +122,6 @@ fun Feed(nav: DestinationsNavigator) {
         // viewModel.fetchFeed() must be adapted to fetch data based on the current
         // FeedDestination.values()[selectedDestination].
         viewModel.fetchFeed()
-    }
-
-    LaunchedEffect(feed, isFetchingFromViewModel) {
-        Log.d("Feed", "State changed: feed size: ${feed?.size}, isFetchingFromViewModel: $isFetchingFromViewModel")
     }
 
     LaunchedEffect(Unit) {
@@ -138,11 +149,7 @@ fun Feed(nav: DestinationsNavigator) {
                         modifier = Modifier.padding(16.dp)
                     )
                 }
-            } else if (feed == null && isFetchingFromViewModel) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LinearWavyProgressIndicator()
-                }
-            } else if (feed != null) {
+            } else {
                 // Feed content (LazyColumn)
                 LazyColumn(
                     state = listState,
@@ -160,33 +167,71 @@ fun Feed(nav: DestinationsNavigator) {
                         PrimaryTabRow(
                             selectedTabIndex = selectedDestination,
                         ) {
-                            tabTitles.forEachIndexed { index, title ->
-                                Tab(
-                                    selected = selectedDestination == index,
-                                    onClick = {
-                                        if (selectedDestination != index) {
-                                            selectedDestination = index
-                                            Log.d("Feed", "Tab selected: ${FeedDestination.values()[index]}. ViewModel logic needs update.")
-                                            viewModel.fetchFeed()
-                                        }
-                                    },
-                                    text = { Text(title) }
-                                )
-                            }
+                            Tab(
+                                selected = selectedDestination == 0,
+                                onClick = {
+                                    if (selectedDestination != 0) {
+                                        selectedDestination = 0
+                                        viewModel.fetchFeed()
+                                    }
+                                },
+                                text = { Text(FeedDestination.Following.name) }
+                            )
+                            Tab(
+                                selected = selectedDestination == 1,
+                                onClick = {
+                                    if (selectedDestination != 1) {
+                                        selectedDestination = 1
+                                        //viewModel.fetchForYou()
+                                    }
+                                },
+                                text = { Text(FeedDestination.ForYou.title ?: FeedDestination.ForYou.name) }
+                            )
                         }
                     }
-                    items(feed) {
-                        PostView(feedViewPost = it, nav)
+                    if (selectedDestination == 0) {
+                        if (followingFeedData != null) {
+                            items(followingFeedData) {
+                                PostView(it, nav)
+                            }
+                        } else {
+                            Loading()
+                        }
+                    } else {
+                        if (forYouFeedData != null && forYouFeedData.isNotEmpty()) {
+                            items(forYouFeedData) {
+                                PostView(it, nav)
+                            }
+                        } else if(forYouFeedData != null && forYouFeedData.isEmpty()) {
+                            item {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "No posts available",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
+                            }
+                            item {
+                                Button(
+                                    onClick = {
+                                        WorkManager.getInstance(context).enqueueFeedWorkers()
+                                    }
+                                ) {
+                                    Text("Generate For You Feed")
+                                }
+                            }
+                        } else {
+                            Loading()
+                        }
                     }
                 }
             }
 
-            // TopBarBackground - zIndex(2f)
             TopBarBackground(
-                modifier = Modifier.zIndex(2f) // Above scrolling content
+                modifier = Modifier.zIndex(2f)
             )
 
-            // Column for TopBarInteractiveElements - zIndex(3f)
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -253,6 +298,60 @@ fun TopBarButtons(listState: LazyListState, navigator: DestinationsNavigator) {
                 navigator.navigate(SettingsDestination)
             }) {
                 Icon(Icons.Rounded.Settings, contentDescription = "Settings", modifier = Modifier.size(25.dp))
+            }
+        }
+    }
+}
+
+private fun LazyListScope.Loading(){
+    items(8, key = { it }) {
+        val infiniteTransition = rememberInfiniteTransition()
+
+        val alpha by infiniteTransition.animateFloat(
+            initialValue = 0.15f,
+            targetValue = 0.1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+
+        PostStructure(
+            avatar = {
+                Box(
+                    modifier = it
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            CircleShape
+                        )
+                )
+            },
+            headline = {
+                Box(
+                    modifier = Modifier
+                        .padding(bottom = 8.dp)
+                        .fillMaxWidth(0.5f)
+                        .height(10.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            MaterialTheme.shapes.small
+                        )
+                )
+            },
+            context = {},
+            actions = {}
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .fillMaxWidth(if(it == 2) 0.8f else 0.9f)
+                        .height(9.dp)
+                        .background(
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                            MaterialTheme.shapes.small
+                        )
+                )
             }
         }
     }
