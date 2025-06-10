@@ -75,6 +75,7 @@ import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.logic.FeedWorker
 import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
+import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
 import sh.christian.ozone.BlueskyApi
@@ -215,7 +216,7 @@ fun Feed(nav: DestinationsNavigator) {
                             item {
                                 Button(
                                     onClick = {
-                                        WorkManager.getInstance(context).enqueueFeedWorkers()
+                                        WorkManager.getInstance(context).enqueueImmediateFeedWorker()
                                     }
                                 ) {
                                     Text("Generate For You Feed")

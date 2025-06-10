@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext // Added
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
+import androidx.work.WorkManager
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -38,6 +39,7 @@ import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
+import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
 import io.github.turtlepaw.mindsky.ui.theme.MindskyTheme
 
 object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
@@ -85,7 +87,6 @@ object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
 }
 
 class MainActivity : ComponentActivity() {
-
     @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity() {
                 if (!notifications.status.isGranted) {
                     notifications.launchPermissionRequest()
                 }
+
+                WorkManager.getInstance(this@MainActivity).enqueueFeedWorkers()
             }
 
             // Get API and authTokensFlow from MindskyApplication
@@ -134,4 +137,5 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 }

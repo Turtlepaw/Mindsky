@@ -9,9 +9,12 @@ import app.bsky.feed.FeedViewPost
 import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.PostView
+import io.objectbox.Box
+import io.objectbox.BoxStore
 import kotlinx.coroutines.launch
 import sh.christian.ozone.BlueskyApi
 import sh.christian.ozone.api.AtUri
+import kotlin.random.Random
 
 class FeedViewModel(
     private val api: BlueskyApi
@@ -82,20 +85,40 @@ class FeedViewModel(
         followingFeed.value = result
     }
 
+    fun getPostsSortedByScore(box: Box<EmbeddedPost>): List<EmbeddedPost> {
+        return box.query()
+            .notNull(EmbeddedPost_.score)
+            .build()
+            .find()
+            .map { it to (it.score!! + Random.nextFloat() * 0.1f) }
+            .sortedByDescending { it.second }
+            .map { it.first }
+    }
+
     suspend fun fetchForYou(limit: Long = 100) {
-        val posts = ObjectBox.store.boxFor(EmbeddedPost::class.java).all
-        if (posts.isEmpty()) {
+        val box = ObjectBox.store.boxFor(EmbeddedPost::class.java)
+        if (box.all.isEmpty()) {
             Log.d("FeedVM", "No posts found in ObjectBox, fetching from API.")
             forYouFeed.value = emptyList()
             return
         }
-        val postRecords = api.getPosts(
-            GetPostsQueryParams(
-                uris = posts.map {
-                    AtUri(it.uri)
-                },
-            )
-        ).maybeResponse()
-        forYouFeed.value = postRecords?.posts
+
+        val posts = getPostsSortedByScore(box)
+
+        val uris = posts.map { AtUri(it.uri) }
+        val chunkSize = 25
+        val allPosts = mutableListOf<PostView>()
+
+        // Split uris into chunks of max 25
+        uris.chunked(chunkSize).forEach { chunk ->
+            val postRecords = api.getPosts(
+                GetPostsQueryParams(
+                    uris = chunk
+                )
+            ).maybeResponse()
+            postRecords?.posts?.let { allPosts.addAll(it) }
+        }
+
+        forYouFeed.value = allPosts
     }
 }
