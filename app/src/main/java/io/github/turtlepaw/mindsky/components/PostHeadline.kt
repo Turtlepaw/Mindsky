@@ -39,7 +39,10 @@ fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
                     imageVector = Icons.Rounded.CheckCircle,
                     contentDescription = "Verified",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp).padding(horizontal = 2.dp).align(Alignment.CenterVertically)
+                    modifier = Modifier
+                        .size(23.dp)
+                        .padding(horizontal = 2.dp)
+                        .align(Alignment.CenterVertically)
                 )
             } else {
                 Spacer(modifier = Modifier.size(5.dp))

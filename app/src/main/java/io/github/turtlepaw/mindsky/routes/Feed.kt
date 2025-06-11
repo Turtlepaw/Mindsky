@@ -9,75 +9,80 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column // Added
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Tab // Added
-import androidx.compose.material3.PrimaryTabRow // Changed from TabRow
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
+import com.ramcosta.composedestinations.generated.destinations.ProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import io.github.turtlepaw.mindsky.FeedViewModel
-import io.github.turtlepaw.mindsky.components.post.PostView
+import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.TopBarBackground
 import io.github.turtlepaw.mindsky.components.TopBarInteractiveElements
+import io.github.turtlepaw.mindsky.components.post.PostComponent
+import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
-import io.github.turtlepaw.mindsky.logic.FeedWorker
-import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
+import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
+import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
+import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
 import sh.christian.ozone.BlueskyApi
 import java.io.File
 
@@ -118,7 +123,10 @@ fun Feed(nav: DestinationsNavigator) {
 
     // Updated LaunchedEffect to react to selectedDestination changes
     LaunchedEffect(selectedDestination, viewModel) {
-        Log.d("Feed", "LaunchedEffect for selectedDestination: ${FeedDestination.values()[selectedDestination]}. Requesting fetch.")
+        Log.d(
+            "Feed",
+            "LaunchedEffect for selectedDestination: ${FeedDestination.values()[selectedDestination]}. Requesting fetch."
+        )
         // USER ACTION REQUIRED in ViewModel:
         // viewModel.fetchFeed() must be adapted to fetch data based on the current
         // FeedDestination.values()[selectedDestination].
@@ -164,7 +172,8 @@ fun Feed(nav: DestinationsNavigator) {
                         Spacer(modifier = Modifier.height(56.dp))
                     }
                     item { // PrimaryTabRow is now an item in LazyColumn
-                        val tabTitles = remember { FeedDestination.entries.map { it.title ?: it.name } }
+                        val tabTitles =
+                            remember { FeedDestination.entries.map { it.title ?: it.name } }
                         PrimaryTabRow(
                             selectedTabIndex = selectedDestination,
                         ) {
@@ -186,14 +195,28 @@ fun Feed(nav: DestinationsNavigator) {
                                         //viewModel.fetchForYou()
                                     }
                                 },
-                                text = { Text(FeedDestination.ForYou.title ?: FeedDestination.ForYou.name) }
+                                text = {
+                                    Text(
+                                        FeedDestination.ForYou.title ?: FeedDestination.ForYou.name
+                                    )
+                                }
                             )
                         }
                     }
                     if (selectedDestination == 0) {
                         if (followingFeedData != null) {
                             items(followingFeedData) {
-                                PostView(it, nav)
+                                PostComponent(it, nav)
+                            }
+                            item {
+                                LaunchedEffect(Unit) {
+                                    viewModel.loadMoreFollowingFeed()
+                                }
+
+                                LoadingIndicator(
+                                    modifier = Modifier
+                                        .padding(16.dp),
+                                )
                             }
                         } else {
                             Loading()
@@ -201,11 +224,19 @@ fun Feed(nav: DestinationsNavigator) {
                     } else {
                         if (forYouFeedData != null && forYouFeedData.isNotEmpty()) {
                             items(forYouFeedData) {
-                                PostView(it, nav)
+                                PostComponent(it.second, nav, discoveryContext = { modifier ->
+                                    PostInsightsContext(
+                                        it.first.score ?: 0f,
+                                        modifier
+                                    )
+                                })
                             }
-                        } else if(forYouFeedData != null && forYouFeedData.isEmpty()) {
+                        } else if (forYouFeedData != null && forYouFeedData.isEmpty()) {
                             item {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Text(
                                         text = "No posts available",
                                         style = MaterialTheme.typography.bodyLarge,
@@ -216,7 +247,8 @@ fun Feed(nav: DestinationsNavigator) {
                             item {
                                 Button(
                                     onClick = {
-                                        WorkManager.getInstance(context).enqueueImmediateFeedWorker()
+                                        WorkManager.getInstance(context)
+                                            .enqueueImmediateFeedWorker()
                                     }
                                 ) {
                                     Text("Generate For You Feed")
@@ -248,7 +280,10 @@ fun Feed(nav: DestinationsNavigator) {
                         } else if (currentTime - lastFetchTime < 5000) {
                             Log.d("Feed", "Fetched too recently, click ignored. Cooldown active.")
                         } else {
-                            Log.d("Feed", "Requesting feed refresh for: ${FeedDestination.values()[selectedDestination]}")
+                            Log.d(
+                                "Feed",
+                                "Requesting feed refresh for: ${FeedDestination.values()[selectedDestination]}"
+                            )
                             lastFetchTime = currentTime
                             viewModel.fetchFeed()
                         }
@@ -280,6 +315,8 @@ fun TopBarButtons(listState: LazyListState, navigator: DestinationsNavigator) {
         label = "iconRowAlpha"
     )
 
+    val profileModel = LocalProfileModel.current
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -293,18 +330,66 @@ fun TopBarButtons(listState: LazyListState, navigator: DestinationsNavigator) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { /* TODO */ }, enabled = false) {}
+            Box(
+                modifier = Modifier
+                    .padding(start = 6.dp)
+            ) {
+                val profileUiState by profileModel.uiState.collectAsState()
+                when (profileUiState) {
+                    ProfileUiState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                    CircleShape
+                                )
+                        )
+                    }
+
+                    is ProfileUiState.Error -> {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                    CircleShape
+                                )
+                        )
+                    }
+
+                    is ProfileUiState.Success -> {
+                        val avatarUrl =
+                            (profileUiState as ProfileUiState.Success).profile.avatar?.uri
+                        Avatar(
+                            avatarUrl = avatarUrl,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.ContextClick)
+                                    navigator.navigate(ProfileDestination)
+                                },
+                            contentDescription = "Avatar"
+                        )
+                    }
+                }
+            }
             IconButton(onClick = {
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.ContextClick)
                 navigator.navigate(SettingsDestination)
             }) {
-                Icon(Icons.Rounded.Settings, contentDescription = "Settings", modifier = Modifier.size(25.dp))
+                Icon(
+                    Icons.Rounded.Settings,
+                    contentDescription = "Settings",
+                    modifier = Modifier.size(25.dp)
+                )
             }
         }
     }
 }
 
-private fun LazyListScope.Loading(){
+fun LazyListScope.Loading() {
     items(8, key = { it }) {
         val infiniteTransition = rememberInfiniteTransition()
 
@@ -339,14 +424,14 @@ private fun LazyListScope.Loading(){
                         )
                 )
             },
-            context = {},
+            metadata = {},
             actions = {}
         ) {
             repeat(3) {
                 Box(
                     modifier = Modifier
                         .padding(vertical = 4.dp)
-                        .fillMaxWidth(if(it == 2) 0.8f else 0.9f)
+                        .fillMaxWidth(if (it == 2) 0.8f else 0.9f)
                         .height(9.dp)
                         .background(
                             MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),

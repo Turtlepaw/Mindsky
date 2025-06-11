@@ -3,9 +3,7 @@ package io.github.turtlepaw.mindsky.components.post
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Arrangement.spacedBy
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -24,14 +22,15 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Repeat
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -57,9 +56,7 @@ import io.github.turtlepaw.mindsky.components.PostHeadline
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
-import sh.christian.ozone.api.AtIdentifier
 import sh.christian.ozone.api.AtUri
 import sh.christian.ozone.api.Did
 import sh.christian.ozone.api.Nsid
@@ -67,18 +64,19 @@ import sh.christian.ozone.api.RKey
 import sh.christian.ozone.api.model.JsonContent.Companion.encodeAsJsonContent
 
 @Composable
-fun PostView(
+fun PostComponent(
     postView: FeedViewPost,
     navigator: DestinationsNavigator,
 ) {
-    PostView(postView.post, navigator, postView.reason)
+    PostComponent(postView.post, navigator, postView.reason)
 }
 
 @Composable
-fun PostView(
+fun PostComponent(
     postView: PostView,
     navigator: DestinationsNavigator,
-    reason: FeedViewPostReasonUnion? = null
+    reason: FeedViewPostReasonUnion? = null,
+    discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
 ) {
     val author = postView.author
     val postRecord = postView.record.decodeAs<Post>()
@@ -87,7 +85,7 @@ fun PostView(
     val coroutineScope = rememberCoroutineScope()
 
     PostStructure(
-        context = {
+        metadata = {
             if (reason is FeedViewPostReasonUnion.ReasonRepost) {
                 Row(
                     horizontalArrangement = spacedBy(8.dp),
@@ -179,7 +177,8 @@ fun PostView(
                     }
                 }
             }
-        }
+        },
+        discoveryContext = discoveryContext
     ) {
         if (postRecord.reply != null) {
             Row {

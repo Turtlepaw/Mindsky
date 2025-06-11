@@ -17,13 +17,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.work.ExistingWorkPolicy
 import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import io.github.turtlepaw.mindsky.logic.FeedWorker
-import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
+import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -50,13 +48,13 @@ fun Settings(navigator: DestinationsNavigator) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-            .padding(horizontal = 24.dp),
+                .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ){
             item {
                 Button(
                     onClick = {
-                        WorkManager.getInstance(context).enqueueFeedWorkers()
+                        WorkManager.getInstance(context).enqueueImmediateFeedWorker()
                     }
                 ) {
                     Text("Launch embedding")

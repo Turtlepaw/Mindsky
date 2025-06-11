@@ -1,5 +1,6 @@
 package io.github.turtlepaw.mindsky
 
+// import io.github.turtlepaw.mindsky.auth.UserSession // Not directly used here anymore
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,12 +15,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember // Keep this
-import androidx.compose.ui.platform.LocalContext // Added
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.work.WorkManager
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -27,61 +31,60 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
-import com.ramcosta.composedestinations.animations.defaults.DefaultFadingTransitions
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.FeedDestination
-import com.ramcosta.composedestinations.generated.destinations.LoginDestination
 import com.ramcosta.composedestinations.generated.destinations.OnboardingDestination
-import com.ramcosta.composedestinations.rememberNavHostEngine
-import com.ramcosta.composedestinations.spec.DestinationStyle
 import io.github.turtlepaw.mindsky.auth.SessionManager
-// import io.github.turtlepaw.mindsky.auth.UserSession // Not directly used here anymore
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
+import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
 import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
+import io.github.turtlepaw.mindsky.repositories.ProfileRepository
 import io.github.turtlepaw.mindsky.ui.theme.MindskyTheme
+import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModel
+import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModelFactory
 
 object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
     private val fastOutExtraSlowIn = CubicBezierEasing(0.05f, 0f, 0.133333f, 1f)
     private val slideDistancePx = 96
 
-    private val enterDuration = 240
-    private val exitDuration = 210
+    private val enterDuration = 340
+    private val exitDuration = 200
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(
+        fadeIn(
+            animationSpec = tween(durationMillis = enterDuration, easing = LinearEasing)
+        ) + slideInHorizontally(
             initialOffsetX = { slideDistancePx },
             animationSpec = tween(durationMillis = enterDuration, easing = fastOutExtraSlowIn)
-        ) + fadeIn(
-            animationSpec = tween(durationMillis = enterDuration, easing = LinearEasing)
         )
     }
 
     override val exitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(
+        fadeOut(
+            animationSpec = tween(durationMillis = exitDuration, easing = LinearEasing)
+        ) + slideOutHorizontally(
             targetOffsetX = { -slideDistancePx },
             animationSpec = tween(durationMillis = exitDuration, easing = fastOutExtraSlowIn)
-        ) + fadeOut(
-            animationSpec = tween(durationMillis = exitDuration, easing = LinearEasing)
         )
     }
 
     override val popEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
-        slideInHorizontally(
+        fadeIn(
+            animationSpec = tween(durationMillis = enterDuration, easing = LinearEasing)
+        ) + slideInHorizontally(
             initialOffsetX = { -slideDistancePx },
             animationSpec = tween(durationMillis = enterDuration, easing = fastOutExtraSlowIn)
-        ) + fadeIn(
-            animationSpec = tween(durationMillis = enterDuration, easing = LinearEasing)
         )
     }
 
     override val popExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
-        slideOutHorizontally(
+        fadeOut(
+            animationSpec = tween(durationMillis = exitDuration, easing = LinearEasing)
+        ) + slideOutHorizontally(
             targetOffsetX = { slideDistancePx },
             animationSpec = tween(durationMillis = exitDuration, easing = fastOutExtraSlowIn)
-        ) + fadeOut(
-            animationSpec = tween(durationMillis = exitDuration, easing = LinearEasing)
         )
     }
 }
@@ -122,17 +125,32 @@ class MainActivity : ComponentActivity() {
             val blueskyApi = mindskyApplication.blueskyApi
             val authTokensFlow = mindskyApplication.authTokensFlow
 
+            val profileRepository = ProfileRepository(blueskyApi)
+            val viewModel: ProfileViewModel = viewModel(
+                factory = ProfileViewModelFactory(
+                    profileRepository,
+                    rememberedSessionManager
+                )
+            )
+
             CompositionLocalProvider(
                 LocalMindskyApi provides blueskyApi, // Use API from Application
                 LocalSessionManager provides rememberedSessionManager,
-                LocalAuthTokensFlow provides authTokensFlow // Use flow from Application
+                LocalAuthTokensFlow provides authTokensFlow,
+                LocalProfileModel provides viewModel,
             ) {
                 MindskyTheme {
-                    DestinationsNavHost(
-                        navGraph = NavGraphs.root,
-                        start = startRoute,
-                        defaultTransitions = DefaultSlideFadeTransitions
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        DestinationsNavHost(
+                            navGraph = NavGraphs.root,
+                            start = startRoute,
+                            defaultTransitions = DefaultSlideFadeTransitions
+                        )
+                    }
                 }
             }
         }

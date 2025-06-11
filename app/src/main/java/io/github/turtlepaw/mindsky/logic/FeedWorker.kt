@@ -41,7 +41,11 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.takeFrom
 import io.objectbox.BoxStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import sh.christian.ozone.api.AtUri
 import sh.christian.ozone.api.AuthenticatedXrpcBlueskyApi
 import sh.christian.ozone.api.BlueskyAuthPlugin
@@ -76,7 +80,13 @@ class FeedWorker(
         val TIME_EVENING = LocalTime.of(16, 0)
         val TIME_MORNING = LocalTime.of(4, 0)
 
-        // Enqueueing logic remains the same
+        // Reduced limits for mobile devices
+        private const val MAX_POSTS_PER_FEED = 100  // Reduced from 250
+        private const val PROCESSING_BATCH_SIZE = 5  // Reduced from 10
+        private const val MEMORY_CHECK_INTERVAL = 20 // Check memory every 20 items
+        private const val MAX_MEMORY_USAGE_MB = 150  // Trigger GC if above this
+
+        // Enqueueing logic with better constraints
         fun WorkManager.enqueueFeedWorkers(
             existingWorkPolicy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
         ) {
@@ -109,9 +119,11 @@ class FeedWorker(
                         .setRequiredNetworkType(NetworkType.CONNECTED)
                         .setRequiresDeviceIdle(requireIdle)
                         .setRequiresBatteryNotLow(true)
+                        .setRequiresCharging(false) // More lenient
                         .build()
                 )
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+                //.setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
         }
 
@@ -123,6 +135,7 @@ class FeedWorker(
                         .setRequiresBatteryNotLow(true)
                         .build()
                 )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .build()
         }
 
@@ -140,6 +153,20 @@ class FeedWorker(
                 manager.createNotificationChannel(channel)
             }
         }
+
+        // Memory monitoring helper
+        private fun getCurrentMemoryUsageMB(): Long {
+            val runtime = Runtime.getRuntime()
+            val usedMemory = runtime.totalMemory() - runtime.freeMemory()
+            return usedMemory / (1024 * 1024)
+        }
+
+        private suspend fun forceGarbageCollection() {
+            withContext(Dispatchers.IO) {
+                System.gc()
+                delay(100) // Give GC time to work
+            }
+        }
     }
 
     init {
@@ -153,18 +180,17 @@ class FeedWorker(
         indeterminate: Boolean = false
     ) {
         val now = System.currentTimeMillis()
-        if (now - lastProgressUpdate > 500) { // Update at most every 500ms
-            val notification = createNotification(stage, progress, indeterminate)
-            setForeground(getForegroundInfo(stage, progress, indeterminate))
-            setProgress(workDataOf("stage" to stage.name, "progress" to progress))
-            lastProgressUpdate = now
+        if (now - lastProgressUpdate > 1000) { // Update at most every 1 second (reduced frequency)
+            try {
+                val notification = createNotification(stage, progress, indeterminate)
+                setForeground(getForegroundInfo(stage, progress, indeterminate))
+                setProgress(workDataOf("stage" to stage.name, "progress" to progress))
+                lastProgressUpdate = now
+            } catch (e: Exception) {
+                Log.e("FeedWorker", "Failed to update notification", e)
+            }
         }
-
-//        // Also update the notification manager directly for immediate feedback
-//        val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-//        notificationManager.notify(NOTIFICATION_ID, notification)
     }
-
 
     private fun getForegroundInfo(
         stage: WorkStage,
@@ -172,7 +198,7 @@ class FeedWorker(
         indeterminate: Boolean = false
     ): ForegroundInfo {
         val notification = createNotification(stage, progress, indeterminate)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { // Q for foregroundServiceType
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(
                 NOTIFICATION_ID,
                 notification,
@@ -183,11 +209,9 @@ class FeedWorker(
         }
     }
 
-    // Keep this for the initial foreground info call from doWork()
     override suspend fun getForegroundInfo(): ForegroundInfo {
         return getForegroundInfo(WorkStage.STARTING, 0)
     }
-
 
     private fun createNotification(
         stage: WorkStage,
@@ -207,41 +231,46 @@ class FeedWorker(
             .setContentTitle(title)
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_popup_sync)
-            .setOngoing(true)
+            .setOngoing(stage != WorkStage.COMPLETE)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, indeterminate && stage != WorkStage.COMPLETE)
             .build()
     }
 
     fun getBlueskyApi(): AuthenticatedXrpcBlueskyApi? {
-        val sessionManager = SessionManager(appContext)
-        val currentSession = sessionManager.getSession()
+        return try {
+            val sessionManager = SessionManager(appContext)
+            val currentSession = sessionManager.getSession()
 
-        val initialTokens = currentSession?.let {
-            BlueskyAuthPlugin.Tokens(it.accessToken, it.refreshToken)
-        } ?: return null
+            val initialTokens = currentSession?.let {
+                BlueskyAuthPlugin.Tokens(it.accessToken, it.refreshToken)
+            } ?: return null
 
-        val authTokensFlow = MutableStateFlow(initialTokens)
+            val authTokensFlow = MutableStateFlow(initialTokens)
 
-        val httpClient = HttpClient(OkHttp) {
-            install(Logging) {
-                logger = object : Logger {
-                    override fun log(message: String) {
-                        Log.v("Ktor_Default", message)
+            val httpClient = HttpClient(OkHttp) {
+                install(Logging) {
+                    logger = object : Logger {
+                        override fun log(message: String) {
+                            Log.v("Ktor_Default", message)
+                        }
                     }
+                    level = LogLevel.HEADERS
                 }
-                level = LogLevel.HEADERS
+                defaultRequest {
+                    url.takeFrom("https://bsky.social")
+                }
+                expectSuccess = true
             }
-            defaultRequest {
-                url.takeFrom("https://bsky.social")
-            }
-            expectSuccess = true
-        }
 
-        return AuthenticatedXrpcBlueskyApi(
-            initialTokens = authTokensFlow.value,
-            httpClient = httpClient,
-        )
+            AuthenticatedXrpcBlueskyApi(
+                initialTokens = authTokensFlow.value,
+                httpClient = httpClient,
+            )
+        } catch (e: Exception) {
+            Log.e("FeedWorker", "Failed to initialize Bluesky API", e)
+            null
+        }
     }
 
     suspend fun pullLikes(
@@ -249,126 +278,258 @@ class FeedWorker(
         api: AuthenticatedXrpcBlueskyApi,
         session: UserSession,
         postEmbedder: PostEmbedder,
-        onProgress: suspend (Int) -> Unit // Progress 0-100 (approximate)
-    ): List<LikeVector> {
+        onProgress: suspend (Int) -> Unit
+    ): List<LikeVector> = withContext(Dispatchers.IO) {
         val box = objectBox.boxFor(LikeVector::class.java)
-        val allLikes = mutableListOf<LikeVector>().apply { addAll(box.all) }
+        val allLikes = mutableListOf<LikeVector>()
+        val existingLikes = box.all
+        allLikes.addAll(existingLikes)
+
         val knownUris = mutableSetOf<String>().apply {
             addAll(allLikes.map { it.uri })
         }
+
         var cursor: String? = null
         var pagesFetched = 0
-        val estimatedTotalPages = 5 // A rough estimate, can be adjusted or made smarter
+        val maxPages = 3 // Limit pages to prevent memory issues
+        val estimatedTotalPages = maxPages
 
-        while (true) {
-            onProgress((pagesFetched * 100) / estimatedTotalPages) // Report progress
+        try {
+            while (pagesFetched < maxPages) {
+                // Check if we should stop due to memory pressure
+                if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
+                    Log.w("FeedWorker", "Memory usage high, stopping likes fetch early")
+                    break
+                }
 
-            val response = api.getActorLikes(
-                GetActorLikesQueryParams(
-                    actor = Did(session.did),
-                    limit = 100, // Max limit
-                    cursor = cursor
-                )
-            ).maybeResponse()
+                onProgress((pagesFetched * 100) / estimatedTotalPages)
 
-            pagesFetched++
+                val response = try {
+                    api.getActorLikes(
+                        GetActorLikesQueryParams(
+                            actor = Did(session.did),
+                            limit = 50, // Reduced from 100
+                            cursor = cursor
+                        )
+                    ).maybeResponse()
+                } catch (e: Exception) {
+                    Log.e("FeedWorker", "Error fetching likes", e)
+                    break
+                }
 
-            if (response == null || response.feed.isEmpty()) {
-                Log.d("FeedWorker", "No more likes to process or API error (page $pagesFetched)")
-                break
+                pagesFetched++
+
+                if (response == null || response.feed.isEmpty()) {
+                    Log.d("FeedWorker", "No more likes to process (page $pagesFetched)")
+                    break
+                }
+
+                val newLikes = response.feed.filter { it.post.uri.atUri !in knownUris }
+                if (newLikes.isEmpty() && response.cursor == null) {
+                    Log.d("FeedWorker", "No new likes and no more pages.")
+                    break
+                }
+
+                // Process likes in smaller batches
+                newLikes.chunked(5).forEach { likeBatch ->
+                    yield() // Allow other coroutines to run
+
+                    for (like in likeBatch) {
+                        try {
+                            val post = like.post.record.decodeAs<Post>()
+                            if (post.text == null || post.text.isBlank()) {
+                                Log.w(
+                                    "FeedWorker",
+                                    "Skipping like with empty text: ${like.post.uri}"
+                                )
+                                continue
+                            }
+                            val vector = postEmbedder.encode(post.text)
+                            val newVector = LikeVector(
+                                uri = like.post.uri.atUri,
+                                cid = like.post.cid.cid,
+                                createdAt = post.createdAt.epochSeconds,
+                                vector = vector,
+                            )
+                            box.put(newVector)
+                            knownUris += newVector.uri
+                            allLikes.add(newVector)
+                        } catch (e: Exception) {
+                            Log.e("FeedWorker", "Error processing like", e)
+                        }
+                    }
+                }
+
+                cursor = response.cursor ?: break
+
+                // Memory management
+                if (pagesFetched % 2 == 0) {
+                    forceGarbageCollection()
+                }
             }
-
-            val newLikes = response.feed.filter { it.post.uri.atUri !in knownUris }
-            // If newLikes is empty, it means we've caught up, but we might have more pages if response.cursor is not null
-            if (newLikes.isEmpty() && response.cursor == null) { // More specific condition to break early
-                Log.d("FeedWorker", "No new likes and no more pages.")
-                break
-            }
-
-            for (like in newLikes) {
-                val post = like.post.record.decodeAs<Post>()
-                val vector = postEmbedder.encode(post.text)
-                val newVector = LikeVector(
-                    uri = like.post.uri.atUri,
-                    cid = like.post.cid.cid,
-                    createdAt = post.createdAt.epochSeconds,
-                    vector = vector,
-                )
-                box.put(newVector)
-                knownUris += newVector.uri
-                allLikes.add(newVector)
-            }
-
-            cursor = response.cursor ?: break // Break if no cursor
+        } catch (e: Exception) {
+            Log.e("FeedWorker", "Error in pullLikes", e)
         }
-        onProgress(100) // Ensure 100% at the end
-        return allLikes
+
+        onProgress(100)
+        allLikes
     }
 
     suspend fun getFamiliarFeeds(
         api: AuthenticatedXrpcBlueskyApi,
-        limitPerFeed: Long = 100,
-        onTimelineFetched: suspend () -> Unit,
-        onDiscoveryFetched: suspend () -> Unit
-    ): List<FeedViewPost> {
-        val followingFeed = api.getTimeline(
-            GetTimelineQueryParams(
-                algorithm = "reverse-chronological",
-                limit = limitPerFeed
-            )
-        ).maybeResponse()?.feed ?: emptyList()
-        onTimelineFetched()
+        minPostsPerFeed: Int = MAX_POSTS_PER_FEED,
+        onTimelineProgress: suspend (fetchedCount: Int, targetCount: Int) -> Unit,
+        onDiscoveryProgress: suspend (fetchedCount: Int, targetCount: Int) -> Unit
+    ): List<FeedViewPost> = withContext(Dispatchers.IO) {
+        val postsPerRequest = 50L // Reduced from 100
 
-        val discoverFeed = api.getFeed(
-            GetFeedQueryParams(
-                feed = AtUri("at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot"),
-                limit = limitPerFeed
-            )
-        ).maybeResponse()?.feed ?: emptyList()
-        onDiscoveryFetched()
+        // Fetch Following Feed (Timeline)
+        val allFollowingPosts = mutableListOf<FeedViewPost>()
+        var followingCursor: String? = null
+        var timelineFetchComplete = false
 
-        return followingFeed + discoverFeed
+        try {
+            while (allFollowingPosts.size < minPostsPerFeed && !timelineFetchComplete) {
+                if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
+                    Log.w("FeedWorker", "Memory pressure, stopping timeline fetch")
+                    break
+                }
+
+                val response = try {
+                    api.getTimeline(
+                        GetTimelineQueryParams(
+                            algorithm = "reverse-chronological",
+                            limit = postsPerRequest,
+                            cursor = followingCursor
+                        )
+                    ).maybeResponse()
+                } catch (e: Exception) {
+                    Log.e("FeedWorker", "Error fetching timeline", e)
+                    break
+                }
+
+                if (response == null || response.feed.isEmpty()) {
+                    timelineFetchComplete = true
+                } else {
+                    allFollowingPosts.addAll(response.feed)
+                    followingCursor = response.cursor
+                    if (followingCursor == null) {
+                        timelineFetchComplete = true
+                    }
+                }
+                onTimelineProgress(allFollowingPosts.size, minPostsPerFeed)
+                yield() // Allow other coroutines to run
+            }
+        } catch (e: Exception) {
+            Log.e("FeedWorker", "Error in timeline fetch", e)
+        }
+
+        onTimelineProgress(allFollowingPosts.size, minPostsPerFeed)
+        val cleanedFollowingFeed = try {
+            FeedTuner.cleanReplies(allFollowingPosts)
+        } catch (e: Exception) {
+            Log.e("FeedWorker", "Error cleaning replies", e)
+            allFollowingPosts
+        }
+
+        // Fetch Discover Feed (reduced scope)
+        val allDiscoveryPosts = mutableListOf<FeedViewPost>()
+        var discoveryCursor: String? = null
+        var discoveryFetchComplete = false
+        val discoverFeedUri =
+            AtUri("at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot")
+
+        try {
+            while (allDiscoveryPosts.size < minPostsPerFeed && !discoveryFetchComplete) {
+                if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
+                    Log.w("FeedWorker", "Memory pressure, stopping discovery fetch")
+                    break
+                }
+
+                val response = try {
+                    api.getFeed(
+                        GetFeedQueryParams(
+                            feed = discoverFeedUri,
+                            limit = postsPerRequest,
+                            cursor = discoveryCursor
+                        )
+                    ).maybeResponse()
+                } catch (e: Exception) {
+                    Log.e("FeedWorker", "Error fetching discovery feed", e)
+                    break
+                }
+
+                if (response == null || response.feed.isEmpty()) {
+                    discoveryFetchComplete = true
+                } else {
+                    allDiscoveryPosts.addAll(response.feed)
+                    discoveryCursor = response.cursor
+                    if (discoveryCursor == null) {
+                        discoveryFetchComplete = true
+                    }
+                }
+                onDiscoveryProgress(allDiscoveryPosts.size, minPostsPerFeed)
+                yield() // Allow other coroutines to run
+            }
+        } catch (e: Exception) {
+            Log.e("FeedWorker", "Error in discovery fetch", e)
+        }
+
+        onDiscoveryProgress(allDiscoveryPosts.size, minPostsPerFeed)
+
+        cleanedFollowingFeed + allDiscoveryPosts
     }
 
-    override suspend fun doWork(): Result {
-        // Initial foreground notification
-        setForeground(getForegroundInfo(WorkStage.STARTING, 0))
-        updateForegroundNotification(WorkStage.STARTING, 0)
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        try {
+            setForeground(getForegroundInfo(WorkStage.STARTING, 0))
+            updateForegroundNotification(WorkStage.STARTING, 0)
 
-        return try {
             updateForegroundNotification(WorkStage.CONNECTING_API, 0, indeterminate = true)
             val api = getBlueskyApi()
             if (api == null) {
                 Log.e("FeedWorker", "Bluesky API not initialized")
-                return Result.failure() // Or Result.retry()
+                return@withContext Result.failure()
             }
-            // Assume API connection is quick, move to next stage
+            updateForegroundNotification(WorkStage.CONNECTING_API, 100, indeterminate = false)
 
-            val postEmbedder = PostEmbedder(appContext)
+            val postEmbedder = try {
+                PostEmbedder(appContext)
+            } catch (e: Exception) {
+                Log.e("FeedWorker", "Failed to initialize PostEmbedder", e)
+                return@withContext Result.failure()
+            }
 
+            // Fetch feeds with reduced limits
             val familiarFeed = getFamiliarFeeds(
-                api,
-                onTimelineFetched = {
+                api = api,
+                minPostsPerFeed = MAX_POSTS_PER_FEED,
+                onTimelineProgress = { fetchedCount, targetCount ->
+                    val progress =
+                        if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(100) else 100
                     updateForegroundNotification(
                         WorkStage.FETCHING_TIMELINE,
-                        100,
+                        progress,
                         indeterminate = false
                     )
                 },
-                onDiscoveryFetched = {
+                onDiscoveryProgress = { fetchedCount, targetCount ->
+                    val progress =
+                        if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(100) else 100
                     updateForegroundNotification(
                         WorkStage.FETCHING_DISCOVERY,
-                        100,
+                        progress,
                         indeterminate = false
                     )
                 }
             )
 
             val totalPostsToProcess = familiarFeed.size
-
-            if (totalPostsToProcess > 0) {
-                updateForegroundNotification(WorkStage.PROCESSING_POSTS, 0)
-            }
+            updateForegroundNotification(
+                WorkStage.PROCESSING_POSTS,
+                0,
+                indeterminate = totalPostsToProcess == 0
+            )
 
             val objectBox = if (ObjectBox.store == null) {
                 ObjectBox.init(appContext)
@@ -379,17 +540,11 @@ class FeedWorker(
             val currentSession = SessionManager(appContext).getSession()
             if (currentSession == null) {
                 Log.e("FeedWorker", "User session not found.")
-                return Result.failure()
+                return@withContext Result.failure()
             }
 
-            updateForegroundNotification(
-                WorkStage.PULLING_LIKES,
-                0,
-                indeterminate = true
-            ) // Start as indeterminate
+            updateForegroundNotification(WorkStage.PULLING_LIKES, 0, indeterminate = true)
             val likes = pullLikes(objectBox, api, currentSession, postEmbedder) { likeProgress ->
-                // As pullLikes progresses, this lambda is called.
-                // We keep it indeterminate for now unless we can get a total count of likes.
                 updateForegroundNotification(
                     WorkStage.PULLING_LIKES,
                     likeProgress,
@@ -398,64 +553,108 @@ class FeedWorker(
             }
             updateForegroundNotification(WorkStage.PULLING_LIKES, 100, indeterminate = false)
 
+            // Clear existing posts
             val postEmbedderBox = objectBox.boxFor(EmbeddedPost::class.java)
-            postEmbedderBox.removeAll() // Clear existing data
+            postEmbedderBox.removeAll()
 
-            val batchSize = 10 // Process posts in small batches
+            // Process posts in smaller batches with memory management
+            familiarFeed.chunked(PROCESSING_BATCH_SIZE).forEachIndexed { batchIndex, batch ->
+                try {
+                    // Check memory before processing batch
+                    if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
+                        forceGarbageCollection()
+                    }
 
-            familiarFeed.chunked(batchSize).forEachIndexed { batchIndex, batch ->
-                val batchEmbeddings = mutableListOf<EmbeddedPost>()
+                    val batchEmbeddings = mutableListOf<EmbeddedPost>()
 
-                batch.forEachIndexed { indexInBatch, feedViewPost ->
-                    val globalIndex = (batchIndex * batchSize) + indexInBatch
-                    val progress = if (totalPostsToProcess > 0) (globalIndex + 1) * 100 / totalPostsToProcess else 0
-                    updateForegroundNotification(WorkStage.PROCESSING_POSTS, progress)
+                    batch.forEachIndexed { indexInBatch, feedViewPost ->
+                        try {
+                            val globalIndex = (batchIndex * PROCESSING_BATCH_SIZE) + indexInBatch
+                            val progress =
+                                if (totalPostsToProcess > 0) (globalIndex + 1) * 100 / totalPostsToProcess else 0
+                            updateForegroundNotification(WorkStage.PROCESSING_POSTS, progress)
 
-                    val postView = feedViewPost.post
-                    val post = postView.record.decodeAs<Post>()
-                    val embedding = postEmbedder.encode(post.text)
+                            val postView = feedViewPost.post
+                            val post = postView.record.decodeAs<Post>()
 
-                    Log.d("FeedWorker", "${post.text} = ${embedding.joinToString(prefix = "[", postfix = "]")}")
+                            if (post.text == null || post.text.isBlank()) {
+                                Log.w(
+                                    "FeedWorker",
+                                    "Skipping post with empty text: ${postView.uri}"
+                                )
+                                return@forEachIndexed
+                            }
 
-                    batchEmbeddings.add(
-                        EmbeddedPost(
-                            uri = postView.uri.atUri,
-                            text = post.text,
-                            embedding = embedding,
-                            authorDid = postView.author.did.did,
-                            timestamp = post.createdAt.epochSeconds,
-                            score = 0f
-                        )
+                            val embedding = postEmbedder.encode(post.text)
+
+                            batchEmbeddings.add(
+                                EmbeddedPost(
+                                    uri = postView.uri.atUri,
+                                    text = post.text,
+                                    embedding = embedding,
+                                    authorDid = postView.author.did.did,
+                                    timestamp = post.createdAt.epochSeconds,
+                                    score = 0f
+                                )
+                            )
+
+                            // Yield control periodically
+                            if (indexInBatch % 2 == 0) {
+                                yield()
+                            }
+                        } catch (e: Exception) {
+                            Log.e("FeedWorker", "Error processing post", e)
+                        }
+                    }
+
+                    // Database update
+                    updateForegroundNotification(
+                        WorkStage.UPDATING_DATABASE,
+                        (batchIndex * 100) / ((totalPostsToProcess + PROCESSING_BATCH_SIZE - 1) / PROCESSING_BATCH_SIZE),
+                        indeterminate = false
                     )
+
+                    val scoredBatch = batchEmbeddings.mapNotNull { post ->
+                        try {
+                            val score = FeedRanker.calculatePostScore(post, likes)
+                            post.copy(score = score)
+                        } catch (e: Exception) {
+                            Log.e("FeedWorker", "Error calculating score", e)
+                            null
+                        }
+                    }
+
+                    scoredBatch.filter { it.score != null }
+                        .sortedByDescending { it.score!! + (Random.nextFloat() * 0.1f) }
+                        .forEach {
+                            try {
+                                postEmbedderBox.put(it)
+                            } catch (e: Exception) {
+                                Log.e("FeedWorker", "Error saving post", e)
+                            }
+                        }
+
+                    batchEmbeddings.clear()
+
+                    // Periodic garbage collection
+                    if (batchIndex % MEMORY_CHECK_INTERVAL == 0) {
+                        forceGarbageCollection()
+                    }
+
+                } catch (e: Exception) {
+                    Log.e("FeedWorker", "Error processing batch $batchIndex", e)
                 }
-
-                // Calculate scores and save this batch immediately
-                updateForegroundNotification(WorkStage.UPDATING_DATABASE,
-                    (batchIndex * 100) / ((totalPostsToProcess + batchSize - 1) / batchSize),
-                    indeterminate = false)
-
-                val scoredBatch = batchEmbeddings.map { post ->
-                    val score = FeedRanker.calculatePostScore(post, likes)
-                    post.copy(score = score)
-                }
-
-                // Save batch to database and clear from memory
-                scoredBatch.filter { it.score != null }
-                    .sortedByDescending { it.score!! + (Random.nextFloat() * 0.1f) }
-                    .forEach { postEmbedderBox.put(it) }
-
-                // Clear batch from memory
-                batchEmbeddings.clear()
-
-                // Force garbage collection hint (optional)
-                System.gc()
             }
 
+            updateForegroundNotification(WorkStage.UPDATING_DATABASE, 100, indeterminate = false)
             updateForegroundNotification(WorkStage.COMPLETE, 100)
+
+            // Final cleanup
+            forceGarbageCollection()
+
             Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
-            // Consider more specific error handling or Result.failure()
+            Log.e("FeedWorker", "Fatal error in doWork", e)
             Result.retry()
         }
     }

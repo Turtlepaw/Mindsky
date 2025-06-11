@@ -1,21 +1,17 @@
 package io.github.turtlepaw.mindsky.components.post
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,15 +24,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ramcosta.composedestinations.generated.destinations.ImageDestination
-import com.ramcosta.composedestinations.generated.destinations.ImageDestination.invoke
+import io.github.turtlepaw.mindsky.utils.Formatters
 
 @Composable
 fun PostStructure(
     headline: @Composable () -> Unit,
     avatar: @Composable (modifier: Modifier) -> Unit,
-    context: @Composable () -> Unit,
+    metadata: @Composable () -> Unit,
     actions: @Composable (modifier: Modifier) -> Unit,
+    discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
     content: @Composable () -> Unit
 ) {
     Column(
@@ -45,7 +41,7 @@ fun PostStructure(
         Column(
             modifier = Modifier.padding(16.dp),
         ) {
-            context()
+            metadata()
 
             Row(
                 horizontalArrangement = spacedBy(12.dp)
@@ -68,6 +64,12 @@ fun PostStructure(
                             .fillMaxWidth()
                             .padding(top = 8.dp)
                     )
+                    discoveryContext(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .padding(horizontal = 4.dp)
+                    )
                 }
             }
         }
@@ -81,6 +83,23 @@ fun PostStructure(
 @Composable
 fun PostAction(
     label: Long?,
+    icon: ImageVector,
+    contentDescription: String,
+    isHighlighted: Boolean = false,
+    onClick: () -> Unit,
+) {
+    PostAction(
+        label = label?.toFloat(),
+        icon = icon,
+        contentDescription = contentDescription,
+        isHighlighted = isHighlighted,
+        onClick = onClick
+    )
+}
+
+@Composable
+fun PostAction(
+    label: Float?,
     icon: ImageVector,
     contentDescription: String,
     isHighlighted: Boolean = false,
@@ -106,7 +125,7 @@ fun PostAction(
             )
             if (label != null && label > 0) {
                 Text(
-                    text = label.toString(),
+                    text = Formatters.formatNumberForLocale(label.toInt()),
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = if (isHighlighted) FontWeight.SemiBold else FontWeight.Normal,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),

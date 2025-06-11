@@ -2,16 +2,20 @@ package io.github.turtlepaw.mindsky.auth
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.core.content.edit
 import com.google.gson.Gson
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.nio.ByteBuffer
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 
 class SessionManager(private val context: Context) {
 
@@ -20,8 +24,12 @@ class SessionManager(private val context: Context) {
     private val keySession = "user_session"
     private val gson = Gson()
 
+    private val _sessionFlow = MutableStateFlow<UserSession?>(null)
+    val sessionFlow: StateFlow<UserSession?> = _sessionFlow.asStateFlow()
+
     init {
         generateSecretKeyIfNotExists()
+        _sessionFlow.value = getSession() // load saved session on startup
     }
 
     private fun generateSecretKeyIfNotExists() {
@@ -76,7 +84,8 @@ class SessionManager(private val context: Context) {
     fun saveSession(session: UserSession) {
         val json = gson.toJson(session)
         val encrypted = encrypt(json)
-        prefs.edit().putString(keySession, encrypted).apply()
+        prefs.edit { putString(keySession, encrypted) }
+        _sessionFlow.value = session
     }
 
     fun getSession(): UserSession? {
@@ -90,7 +99,8 @@ class SessionManager(private val context: Context) {
     }
 
     fun clearSession() {
-        prefs.edit().remove(keySession).apply()
+        prefs.edit { remove(keySession) }
+        _sessionFlow.value = null
     }
 
     private val prefs: SharedPreferences
