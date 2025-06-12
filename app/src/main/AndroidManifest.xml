@@ -8,8 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Add this permission if your worker needs to run at exact times, not strictly necessary for dataSync -->
-    <!-- <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" /> -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
 
     <application

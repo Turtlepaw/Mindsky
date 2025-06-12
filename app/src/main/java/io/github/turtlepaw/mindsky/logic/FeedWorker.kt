@@ -107,7 +107,7 @@ class FeedWorker(
             )
         }
 
-        fun buildWorkRequest(time: LocalTime, requireIdle: Boolean = true): PeriodicWorkRequest {
+        fun buildWorkRequest(time: LocalTime): PeriodicWorkRequest {
             val delay = if (time.isAfter(LocalTime.now())) {
                 Duration.between(LocalTime.now(), time).toMillis()
             } else {
@@ -116,10 +116,9 @@ class FeedWorker(
             return PeriodicWorkRequestBuilder<FeedWorker>(1, TimeUnit.DAYS)
                 .setConstraints(
                     Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .setRequiresDeviceIdle(requireIdle)
+                        .setRequiredNetworkType(NetworkType.UNMETERED)
                         .setRequiresBatteryNotLow(true)
-                        .setRequiresCharging(false) // More lenient
+                        .setRequiresCharging(true)
                         .build()
                 )
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
@@ -131,7 +130,7 @@ class FeedWorker(
             return OneTimeWorkRequestBuilder<FeedWorker>()
                 .setConstraints(
                     Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiredNetworkType(NetworkType.UNMETERED)
                         .setRequiresBatteryNotLow(true)
                         .build()
                 )
@@ -381,7 +380,9 @@ class FeedWorker(
         onTimelineProgress: suspend (fetchedCount: Int, targetCount: Int) -> Unit,
         onDiscoveryProgress: suspend (fetchedCount: Int, targetCount: Int) -> Unit
     ): List<FeedViewPost> = withContext(Dispatchers.IO) {
-        val postsPerRequest = 50L // Reduced from 100
+        val MIN_DISCOVERY_POSTS = 150
+        val MIN_TIMELINE_POSTS = 50
+        val postsPerRequest = 100L // Maximum posts per request
 
         // Fetch Following Feed (Timeline)
         val allFollowingPosts = mutableListOf<FeedViewPost>()
@@ -389,7 +390,7 @@ class FeedWorker(
         var timelineFetchComplete = false
 
         try {
-            while (allFollowingPosts.size < minPostsPerFeed && !timelineFetchComplete) {
+            while (allFollowingPosts.size < MIN_TIMELINE_POSTS && !timelineFetchComplete) {
                 if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
                     Log.w("FeedWorker", "Memory pressure, stopping timeline fetch")
                     break
@@ -405,10 +406,16 @@ class FeedWorker(
                     ).maybeResponse()
                 } catch (e: Exception) {
                     Log.e("FeedWorker", "Error fetching timeline", e)
-                    break
+                    delay(1000) // Add retry delay
+                    continue // Retry on error
                 }
 
-                if (response == null || response.feed.isEmpty()) {
+                if (response == null) {
+                    delay(1000) // Add retry delay on null response
+                    continue
+                }
+
+                if (response.feed.isEmpty()) {
                     timelineFetchComplete = true
                 } else {
                     allFollowingPosts.addAll(response.feed)
@@ -417,14 +424,14 @@ class FeedWorker(
                         timelineFetchComplete = true
                     }
                 }
-                onTimelineProgress(allFollowingPosts.size, minPostsPerFeed)
+                onTimelineProgress(allFollowingPosts.size, MIN_TIMELINE_POSTS)
                 yield() // Allow other coroutines to run
             }
         } catch (e: Exception) {
             Log.e("FeedWorker", "Error in timeline fetch", e)
         }
 
-        onTimelineProgress(allFollowingPosts.size, minPostsPerFeed)
+        onTimelineProgress(allFollowingPosts.size, MIN_TIMELINE_POSTS)
         val cleanedFollowingFeed = try {
             FeedTuner.cleanReplies(allFollowingPosts)
         } catch (e: Exception) {
@@ -432,50 +439,89 @@ class FeedWorker(
             allFollowingPosts
         }
 
-        // Fetch Discover Feed (reduced scope)
+        // Fetch Discover Feed
         val allDiscoveryPosts = mutableListOf<FeedViewPost>()
         var discoveryCursor: String? = null
         var discoveryFetchComplete = false
+        var retryCount = 0
+        val maxRetries = 3
         val discoverFeedUri =
             AtUri("at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.generator/whats-hot")
 
         try {
-            while (allDiscoveryPosts.size < minPostsPerFeed && !discoveryFetchComplete) {
+            while (allDiscoveryPosts.size < MIN_DISCOVERY_POSTS && !discoveryFetchComplete && retryCount < maxRetries) {
                 if (getCurrentMemoryUsageMB() > MAX_MEMORY_USAGE_MB) {
-                    Log.w("FeedWorker", "Memory pressure, stopping discovery fetch")
+                    Log.w(
+                        "FeedWorker",
+                        "Memory pressure at ${allDiscoveryPosts.size}/${MIN_DISCOVERY_POSTS} posts"
+                    )
                     break
                 }
+
+                val remainingPosts = MIN_DISCOVERY_POSTS - allDiscoveryPosts.size
+                val requestLimit = minOf(remainingPosts.toLong(), postsPerRequest)
 
                 val response = try {
                     api.getFeed(
                         GetFeedQueryParams(
                             feed = discoverFeedUri,
-                            limit = postsPerRequest,
+                            limit = requestLimit,
                             cursor = discoveryCursor
                         )
                     ).maybeResponse()
                 } catch (e: Exception) {
-                    Log.e("FeedWorker", "Error fetching discovery feed", e)
-                    break
+                    Log.e(
+                        "FeedWorker",
+                        "Error fetching discovery feed, attempt ${retryCount + 1}/$maxRetries",
+                        e
+                    )
+                    delay(1000) // Add retry delay
+                    retryCount++
+                    continue
                 }
 
-                if (response == null || response.feed.isEmpty()) {
+                if (response == null) {
+                    retryCount++
+                    delay(1000)
+                    continue
+                }
+
+                if (response.feed.isEmpty()) {
+                    if (allDiscoveryPosts.size < MIN_DISCOVERY_POSTS) {
+                        retryCount++
+                        delay(1000)
+                        continue
+                    }
                     discoveryFetchComplete = true
                 } else {
                     allDiscoveryPosts.addAll(response.feed)
                     discoveryCursor = response.cursor
                     if (discoveryCursor == null) {
+                        if (allDiscoveryPosts.size < MIN_DISCOVERY_POSTS) {
+                            retryCount++
+                            delay(1000)
+                            continue
+                        }
                         discoveryFetchComplete = true
                     }
+                    // Reset retry count on successful fetch
+                    retryCount = 0
                 }
-                onDiscoveryProgress(allDiscoveryPosts.size, minPostsPerFeed)
+                onDiscoveryProgress(allDiscoveryPosts.size, MIN_DISCOVERY_POSTS)
                 yield() // Allow other coroutines to run
             }
         } catch (e: Exception) {
             Log.e("FeedWorker", "Error in discovery fetch", e)
         }
 
-        onDiscoveryProgress(allDiscoveryPosts.size, minPostsPerFeed)
+        if (allDiscoveryPosts.size < MIN_DISCOVERY_POSTS) {
+            Log.w(
+                "FeedWorker",
+                "Failed to meet minimum discovery posts requirement: ${allDiscoveryPosts.size}/${MIN_DISCOVERY_POSTS}"
+            )
+        }
+
+        onDiscoveryProgress(allDiscoveryPosts.size, MIN_DISCOVERY_POSTS)
 
         cleanedFollowingFeed + allDiscoveryPosts
     }

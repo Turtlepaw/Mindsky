@@ -1,5 +1,8 @@
 package io.github.turtlepaw.mindsky.components.post
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
@@ -35,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.bsky.feed.FeedViewPost
@@ -44,6 +50,7 @@ import app.bsky.feed.Like
 import app.bsky.feed.Post
 import app.bsky.feed.PostView
 import app.bsky.feed.PostViewEmbedUnion
+import app.bsky.richtext.FacetFeatureUnion
 import coil3.compose.AsyncImage
 import com.atproto.repo.CreateRecordRequest
 import com.atproto.repo.DeleteRecordRequest
@@ -62,6 +69,8 @@ import sh.christian.ozone.api.Did
 import sh.christian.ozone.api.Nsid
 import sh.christian.ozone.api.RKey
 import sh.christian.ozone.api.model.JsonContent.Companion.encodeAsJsonContent
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 @Composable
 fun PostComponent(
@@ -201,9 +210,152 @@ fun PostComponent(
             }
         }
 
-        Text(
-            text = postRecord.text,
-            style = MaterialTheme.typography.bodyLarge
+        val annotatedText = buildAnnotatedString {
+            append(postRecord.text)
+            val textBytes = postRecord.text.toByteArray(StandardCharsets.UTF_8)
+
+            val textByteLength = textBytes.size
+
+            postRecord.facets?.forEach { facet ->
+                val byteStart = facet.index.byteStart.toInt().coerceIn(0, textByteLength)
+                val byteEnd = facet.index.byteEnd.toInt().coerceIn(byteStart, textByteLength)
+
+                // Convert byte offsets to char offsets correctly
+                val charStart = String(textBytes, 0, byteStart, StandardCharsets.UTF_8).length
+                val charEnd = String(textBytes, 0, byteEnd, StandardCharsets.UTF_8).length
+
+                if (charStart >= charEnd) {
+                    Log.w(
+                        "PostComponent",
+                        "Skipping invalid facet range: charStart=$charStart, charEnd=$charEnd from byteStart=$byteStart, byteEnd=$byteEnd. Text: ${postRecord.text}"
+                    )
+                    return@forEach // Skip invalid or empty ranges
+                }
+
+                facet.features.forEach { feature ->
+                    when (feature) {
+                        is FacetFeatureUnion.Link -> {
+                            addStyle(
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textDecoration = TextDecoration.Underline
+                                ).toSpanStyle(),
+                                start = charStart,
+                                end = charEnd
+                            )
+                            addStringAnnotation(
+                                tag = "URL",
+                                annotation = feature.value.uri.uri,
+                                start = charStart,
+                                end = charEnd
+                            )
+                        }
+
+                        is FacetFeatureUnion.Mention -> {
+                            addStyle(
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.primary, // Or another distinct color
+                                    fontWeight = FontWeight.Bold
+                                ).toSpanStyle(),
+                                start = charStart,
+                                end = charEnd
+                            )
+                            addStringAnnotation(
+                                tag = "MENTION",
+                                annotation = feature.value.did.did,
+                                start = charStart,
+                                end = charEnd
+                            )
+                        }
+
+                        is FacetFeatureUnion.Tag -> {
+                            addStyle(
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    color = MaterialTheme.colorScheme.primary, // Or another distinct color
+                                ).toSpanStyle(),
+                                start = charStart,
+                                end = charEnd
+                            )
+                            addStringAnnotation(
+                                tag = "TAG",
+                                annotation = feature.value.tag,
+                                start = charStart,
+                                end = charEnd
+                            )
+                        }
+
+                        else -> {
+                            // Handle Unknown or other types if necessary
+                        }
+                    }
+                }
+            }
+        }
+
+        ClickableText(
+            text = annotatedText,
+            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            onClick = { offset ->
+                val localContext = context // Use the existing context
+
+                annotatedText.getStringAnnotations(tag = "URL", start = offset, end = offset)
+                    .firstOrNull()?.let { annotation ->
+                        Log.d("PostComponent", "Clicked URL: ${annotation.item}")
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                            localContext.startActivity(intent)
+                        } catch (e: ActivityNotFoundException) {
+                            Log.e(
+                                "PostComponent",
+                                "No app found to handle URL: ${annotation.item}",
+                                e
+                            )
+                        } catch (e: Exception) {
+                            Log.e("PostComponent", "Error opening URL: ${annotation.item}", e)
+                        }
+                    }
+
+                annotatedText.getStringAnnotations(tag = "MENTION", start = offset, end = offset)
+                    .firstOrNull()?.let { annotation ->
+                        val did = annotation.item
+                        Log.d("PostComponent", "Clicked Mention: $did")
+                        try {
+                            val profileUrl = "https://bsky.app/profile/$did"
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(profileUrl))
+                            localContext.startActivity(intent)
+                        } catch (e: ActivityNotFoundException) {
+                            Log.e(
+                                "PostComponent",
+                                "No app found to handle Bluesky profile URL for DID: $did",
+                                e
+                            )
+                        } catch (e: Exception) {
+                            Log.e("PostComponent", "Error opening Bluesky profile for DID: $did", e)
+                        }
+                    }
+
+                annotatedText.getStringAnnotations(tag = "TAG", start = offset, end = offset)
+                    .firstOrNull()?.let { annotation ->
+                        val tag = annotation.item
+                        Log.d("PostComponent", "Clicked Tag: $tag")
+                        try {
+                            val queryTag = if (tag.startsWith("#")) tag.substring(1) else tag
+                            val encodedTag =
+                                URLEncoder.encode(queryTag, StandardCharsets.UTF_8.name())
+                            val searchUrl = "https://bsky.app/search?q=%23$encodedTag"
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(searchUrl))
+                            localContext.startActivity(intent)
+                        } catch (e: ActivityNotFoundException) {
+                            Log.e(
+                                "PostComponent",
+                                "No app found to handle Bluesky tag search for: $tag",
+                                e
+                            )
+                        } catch (e: Exception) {
+                            Log.e("PostComponent", "Error opening Bluesky tag search for: $tag", e)
+                        }
+                    }
+            }
         )
 
         when (postView.embed) {
