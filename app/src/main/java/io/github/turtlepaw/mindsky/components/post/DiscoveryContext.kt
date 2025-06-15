@@ -12,10 +12,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+enum class InsightType {
+    Vector,
+    Score
+}
+
 @Composable
 fun PostInsightsContext(
-    score: Float,
-    modifier: Modifier = Modifier
+    value: Float,
+    type: InsightType,
+    modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier) {
         Icon(
@@ -26,7 +32,7 @@ fun PostInsightsContext(
         )
 
         Text(
-            text = "Post score was $score",
+            text = "Post ${type.name.lowercase()} was $value",
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(start = 4.dp)
         )

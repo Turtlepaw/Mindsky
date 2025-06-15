@@ -152,6 +152,7 @@ fun Login(navigator: DestinationsNavigator) {
                                         )
 
                                         isLoading = false
+                                        navigator.popBackStack()
                                         navigator.replaceCurrent(DownloadModelDestination)
                                     }
 

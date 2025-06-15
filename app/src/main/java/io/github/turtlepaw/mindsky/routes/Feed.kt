@@ -34,6 +34,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -45,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +65,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -78,6 +81,7 @@ import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
+import io.github.turtlepaw.mindsky.logic.FeedWorker
 import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
@@ -92,13 +96,61 @@ class FeedViewModelFactory(private val api: BlueskyApi) : ViewModelProvider.Fact
             @Suppress("UNCHECKED_CAST")
             return FeedViewModel(api) as T
         }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+        throw IllegalArgumentException("Unknown ViewModel class: ${'$'}{modelClass.name}")
     }
 }
 
 enum class FeedDestination(val title: String? = null) {
     Following, ForYou("For You")
 }
+
+@Composable
+fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
+    if (feedWorkerInfo != null && (feedWorkerInfo.state == WorkInfo.State.RUNNING || feedWorkerInfo.state == WorkInfo.State.ENQUEUED)) {
+        val progressData = feedWorkerInfo.progress
+        val stageNameString = progressData.getString("stage") ?: FeedWorker.WorkStage.STARTING.name
+        val currentProgressInt = progressData.getInt("progress", 0)
+        // Ensure progressFraction is correctly calculated (progress is 0-100)
+        val progressFraction = currentProgressInt / 100f
+
+        val displayStageName = try {
+            FeedWorker.WorkStage.valueOf(stageNameString).displayName
+        } catch (e: IllegalArgumentException) {
+            stageNameString // Fallback if stage name is somehow not in enum
+        }
+
+        // Determine if progress is indeterminate
+        // It's indeterminate if ENQUEUED, or if RUNNING but no "progress" key yet, or if progress is 0 for a non-STARTING stage
+        val isIndeterminate = feedWorkerInfo.state == WorkInfo.State.ENQUEUED ||
+                (feedWorkerInfo.state == WorkInfo.State.RUNNING && !progressData.keyValueMap.containsKey("progress")) ||
+                (feedWorkerInfo.state == WorkInfo.State.RUNNING && currentProgressInt == 0 && stageNameString != FeedWorker.WorkStage.STARTING.name && stageNameString != FeedWorker.WorkStage.COMPLETE.name)
+
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp) // Padding around the column
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                    MaterialTheme.shapes.small
+                )
+                .padding(horizontal = 12.dp, vertical = 8.dp) // Padding inside the background
+        ) {
+            Text(
+                text = if (feedWorkerInfo.state == WorkInfo.State.ENQUEUED) "Sync starting..." else "Sync: $displayStageName ${if (!isIndeterminate) "($currentProgressInt%)" else ""}",
+                style = MaterialTheme.typography.bodySmall, // Slightly smaller text
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            if (isIndeterminate) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = { progressFraction }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Destination<RootGraph>(start = true)
@@ -121,11 +173,18 @@ fun Feed(nav: DestinationsNavigator) {
     val startDestination = FeedDestination.Following
     var selectedDestination by rememberSaveable { mutableIntStateOf(startDestination.ordinal) }
 
+    val workManager = WorkManager.getInstance(context)
+    val workInfos by workManager.getWorkInfosForUniqueWorkLiveData(FeedWorker.IMMEDIATE_WORK_NAME).observeAsState()
+    val feedWorkerInfo = remember(workInfos) {
+        workInfos?.find { it.tags.contains(FeedWorker.IMMEDIATE_WORK_NAME) || it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+    }
+
+
     // Updated LaunchedEffect to react to selectedDestination changes
     LaunchedEffect(selectedDestination, viewModel) {
         Log.d(
             "Feed",
-            "LaunchedEffect for selectedDestination: ${FeedDestination.values()[selectedDestination]}. Requesting fetch."
+            "LaunchedEffect for selectedDestination: ${'$'}{FeedDestination.values()[selectedDestination]}. Requesting fetch."
         )
         // USER ACTION REQUIRED in ViewModel:
         // viewModel.fetchFeed() must be adapted to fetch data based on the current
@@ -168,8 +227,9 @@ fun Feed(nav: DestinationsNavigator) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     item {
-                        // Spacer for fixed TopBarInteractiveElements (approx. 56dp)
-                        Spacer(modifier = Modifier.height(56.dp))
+                        // Spacer for fixed TopBarInteractiveElements + ProgressIndicator (approx. 56dp + progress height)
+                        // Adjust this spacer if the progress indicator height changes significantly
+                        Spacer(modifier = Modifier.height(88.dp)) // Increased to accommodate progress display roughly
                     }
                     item { // PrimaryTabRow is now an item in LazyColumn
                         val tabTitles =
@@ -227,6 +287,7 @@ fun Feed(nav: DestinationsNavigator) {
                                 PostComponent(it.second, nav, discoveryContext = { modifier ->
                                     PostInsightsContext(
                                         it.first.score ?: 0f,
+                                        Inishgt
                                         modifier
                                     )
                                 })
@@ -282,7 +343,7 @@ fun Feed(nav: DestinationsNavigator) {
                         } else {
                             Log.d(
                                 "Feed",
-                                "Requesting feed refresh for: ${FeedDestination.values()[selectedDestination]}"
+                                "Requesting feed refresh for: ${'$'}{FeedDestination.values()[selectedDestination]}"
                             )
                             lastFetchTime = currentTime
                             viewModel.fetchFeed()
@@ -290,6 +351,8 @@ fun Feed(nav: DestinationsNavigator) {
                     },
                     modifier = Modifier
                 )
+                // Display the worker progress here
+                FeedWorkerProgressDisplay(feedWorkerInfo = feedWorkerInfo)
             }
 
             // TopBarButtons (settings icon) uses internal zIndex(5f)
