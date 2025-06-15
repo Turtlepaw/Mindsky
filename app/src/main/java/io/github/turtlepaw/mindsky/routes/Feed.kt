@@ -1,6 +1,7 @@
 package io.github.turtlepaw.mindsky.routes
 
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -35,6 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -59,6 +61,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -76,6 +80,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.TopBarBackground
 import io.github.turtlepaw.mindsky.components.TopBarInteractiveElements
+import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.components.post.PostStructure
@@ -104,6 +109,7 @@ enum class FeedDestination(val title: String? = null) {
     Following, ForYou("For You")
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
     if (feedWorkerInfo != null && (feedWorkerInfo.state == WorkInfo.State.RUNNING || feedWorkerInfo.state == WorkInfo.State.ENQUEUED)) {
@@ -129,26 +135,42 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp) // Padding around the column
+                .padding(horizontal = 12.dp, vertical = 14.dp) // Padding around the column
                 .background(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                    MaterialTheme.colorScheme.surfaceContainer,
                     MaterialTheme.shapes.small
                 )
-                .padding(horizontal = 12.dp, vertical = 8.dp) // Padding inside the background
+                .padding(horizontal = 14.dp, vertical = 12.dp) // Padding inside the background
         ) {
             Text(
                 text = if (feedWorkerInfo.state == WorkInfo.State.ENQUEUED) "Sync starting..." else "Sync: $displayStageName ${if (!isIndeterminate) "($currentProgressInt%)" else ""}",
                 style = MaterialTheme.typography.bodySmall, // Slightly smaller text
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             if (isIndeterminate) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
-                LinearProgressIndicator(progress = { progressFraction }, modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(progress = { progressFraction }, modifier = Modifier.fillMaxWidth())
             }
         }
     }
+}
+
+@Preview
+@Composable
+fun FeedProgressDisplayPreview(){
+    FeedWorkerProgressDisplay(
+        feedWorkerInfo = WorkInfo(
+            id = java.util.UUID.randomUUID(),
+            state = WorkInfo.State.RUNNING,
+            tags = setOf(FeedWorker.IMMEDIATE_WORK_NAME),
+            progress = androidx.work.Data.Builder()
+                .putString("stage", FeedWorker.WorkStage.PROCESSING_POSTS.name)
+                .putInt("progress", 50)
+                .build()
+        )
+    )
 }
 
 
@@ -229,7 +251,14 @@ fun Feed(nav: DestinationsNavigator) {
                     item {
                         // Spacer for fixed TopBarInteractiveElements + ProgressIndicator (approx. 56dp + progress height)
                         // Adjust this spacer if the progress indicator height changes significantly
-                        Spacer(modifier = Modifier.height(88.dp)) // Increased to accommodate progress display roughly
+                        Spacer(modifier = Modifier.height(50.dp)) // Increased to accommodate progress display roughly
+                    }
+                    item {
+                        AnimatedVisibility(
+                            visible = feedWorkerInfo != null && (feedWorkerInfo.state == WorkInfo.State.RUNNING || feedWorkerInfo.state == WorkInfo.State.ENQUEUED),
+                        ) {
+                            FeedWorkerProgressDisplay(feedWorkerInfo = feedWorkerInfo)
+                        }
                     }
                     item { // PrimaryTabRow is now an item in LazyColumn
                         val tabTitles =
@@ -287,7 +316,7 @@ fun Feed(nav: DestinationsNavigator) {
                                 PostComponent(it.second, nav, discoveryContext = { modifier ->
                                     PostInsightsContext(
                                         it.first.score ?: 0f,
-                                        Inishgt
+                                        InsightType.Score,
                                         modifier
                                     )
                                 })
@@ -351,8 +380,6 @@ fun Feed(nav: DestinationsNavigator) {
                     },
                     modifier = Modifier
                 )
-                // Display the worker progress here
-                FeedWorkerProgressDisplay(feedWorkerInfo = feedWorkerInfo)
             }
 
             // TopBarButtons (settings icon) uses internal zIndex(5f)

@@ -40,6 +40,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.LikeVector
 import io.github.turtlepaw.mindsky.ObjectBox
 import io.github.turtlepaw.mindsky.components.Avatar
+import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
@@ -163,7 +164,11 @@ fun Profile(navigator: DestinationsNavigator) {
                         navigator,
                         reason = null,
                         discoveryContext = { modifier ->
-                            PostInsightsContext(it.first?.vector?.first() ?: 0f, modifier)
+                            PostInsightsContext(
+                                it.first?.vector?.first() ?: 0f,
+                                InsightType.Vector,
+                                modifier
+                            )
                         }
                     )
                 }
