@@ -9,6 +9,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -117,7 +123,7 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         val stageNameString = progressData.getString("stage") ?: FeedWorker.WorkStage.STARTING.name
         val currentProgressInt = progressData.getInt("progress", 0)
         // Ensure progressFraction is correctly calculated (progress is 0-100)
-        val progressFraction = currentProgressInt / 100f
+        val animatedProgress by animateFloatAsState(targetValue = currentProgressInt / 100f, label = "feedWorkerProgress")
 
         val displayStageName = try {
             FeedWorker.WorkStage.valueOf(stageNameString).displayName
@@ -130,7 +136,6 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         val isIndeterminate = feedWorkerInfo.state == WorkInfo.State.ENQUEUED ||
                 (feedWorkerInfo.state == WorkInfo.State.RUNNING && !progressData.keyValueMap.containsKey("progress")) ||
                 (feedWorkerInfo.state == WorkInfo.State.RUNNING && currentProgressInt == 0 && stageNameString != FeedWorker.WorkStage.STARTING.name && stageNameString != FeedWorker.WorkStage.COMPLETE.name)
-
 
         Column(
             modifier = Modifier
@@ -151,7 +156,7 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
             if (isIndeterminate) {
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
-                LinearWavyProgressIndicator(progress = { progressFraction }, modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(progress = { animatedProgress }, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -254,8 +259,18 @@ fun Feed(nav: DestinationsNavigator) {
                         Spacer(modifier = Modifier.height(50.dp)) // Increased to accommodate progress display roughly
                     }
                     item {
+                        val slideDistancePx = with(LocalDensity.current) { 36.dp.toPx().toInt() }
+
                         AnimatedVisibility(
-                            visible = feedWorkerInfo != null && (feedWorkerInfo.state == WorkInfo.State.RUNNING || feedWorkerInfo.state == WorkInfo.State.ENQUEUED),
+                            visible = feedWorkerInfo != null &&
+                                    (feedWorkerInfo.state == WorkInfo.State.RUNNING ||
+                                            feedWorkerInfo.state == WorkInfo.State.ENQUEUED),
+                            enter = fadeIn() + slideInVertically(
+                                initialOffsetY = { -slideDistancePx }  // Starts ABOVE and slides down
+                            ),
+                            exit = fadeOut() + slideOutVertically(
+                                targetOffsetY = { slideDistancePx }  // Exits sliding DOWN
+                            )
                         ) {
                             FeedWorkerProgressDisplay(feedWorkerInfo = feedWorkerInfo)
                         }

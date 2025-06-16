@@ -113,6 +113,7 @@ fun PostComponent(
                             fontWeight = FontWeight.W600,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         ),
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

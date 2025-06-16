@@ -33,7 +33,7 @@ import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.animations.NavHostAnimatedDestinationStyle
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.FeedDestination
-import com.ramcosta.composedestinations.generated.destinations.OnboardingDestination
+import com.ramcosta.composedestinations.generated.destinations.InitialOnboardingDestination
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
         val startRoute = if (sessionManager.getSession() != null) {
             FeedDestination
         } else {
-            OnboardingDestination
+            InitialOnboardingDestination
         }
 
         setContent {
