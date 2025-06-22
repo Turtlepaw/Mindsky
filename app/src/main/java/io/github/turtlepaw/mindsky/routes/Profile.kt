@@ -37,8 +37,8 @@ import app.bsky.feed.PostView
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import io.github.turtlepaw.mindsky.LikeVector
-import io.github.turtlepaw.mindsky.ObjectBox
+import io.github.turtlepaw.mindsky.db.Engagement
+import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.PostComponent
@@ -52,11 +52,11 @@ import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
 @Destination<RootGraph>
 @Composable
 fun Profile(navigator: DestinationsNavigator) {
-    var likes by remember { mutableStateOf<List<Pair<LikeVector?, PostView>>?>(null) }
+    var likes by remember { mutableStateOf<List<Pair<Engagement?, PostView>>?>(null) }
     val api = LocalMindskyApi.current
 
     LaunchedEffect(Unit) {
-        val box = ObjectBox.store.boxFor(LikeVector::class.java)
+        val box = ObjectBox.store.boxFor(Engagement::class.java)
         likes = api.fetchChunkedPosts(
             box.all.map { it to it.uri }
         )
@@ -165,7 +165,7 @@ fun Profile(navigator: DestinationsNavigator) {
                         reason = null,
                         discoveryContext = { modifier ->
                             PostInsightsContext(
-                                it.first?.vector?.first() ?: 0f,
+                                it.first?.embedding?.first() ?: 0f,
                                 InsightType.Vector,
                                 modifier
                             )

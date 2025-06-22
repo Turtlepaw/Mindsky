@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.1.21-2.0.1"
     id("io.objectbox")
+    kotlin("plugin.serialization") version "2.1.20"
 }
 
 android {
@@ -73,8 +74,8 @@ dependencies {
     implementation(libs.core)
     ksp(libs.ksp)
     implementation(libs.bottom.sheet)
-    implementation(files("libs/sentence_embeddings.aar"))
-    implementation(files("libs/model2vec.aar"))
+    implementation(libs.sentence.embeddings)
+    implementation(libs.model2vec)
 
     implementation(libs.okhttp)
     api(libs.bluesky)
@@ -93,4 +94,6 @@ dependencies {
     implementation(libs.accompanist.permissions)
 
     implementation(libs.library)
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
 }

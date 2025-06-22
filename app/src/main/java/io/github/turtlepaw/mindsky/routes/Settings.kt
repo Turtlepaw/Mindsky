@@ -21,7 +21,7 @@ import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>

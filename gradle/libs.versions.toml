@@ -22,6 +22,7 @@ materialIconsExtended = "1.7.8"
 okhttp = "4.12.0"
 onnxruntimeAndroid = "1.22.0"
 securityCrypto = "1.1.0-alpha07"
+sentenceEmbeddings = "0.0.6"
 workRuntimeKtx = "2.10.1"
 objectbox = "4.3.0"
 runtimeLivedata = "1.8.2"
@@ -42,6 +43,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktorClientLogging" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktorClientLogging" }
 library = { module = "me.zhanghai.compose.preference:library", version.ref = "library" }
+model2vec = { module = "io.gitlab.shubham0204:model2vec", version.ref = "sentenceEmbeddings" }
 objectbox-kotlin = { module = "io.objectbox:objectbox-kotlin", version.ref = "objectbox" }
 objectbox-android = { module = "io.objectbox:objectbox-android", version.ref = "objectbox" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -69,6 +71,7 @@ androidx-runtime-livedata = { group = "androidx.compose.runtime", name = "runtim
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntimeAndroid" }
+sentence-embeddings = { module = "io.gitlab.shubham0204:sentence-embeddings", version.ref = "sentenceEmbeddings" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

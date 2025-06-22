@@ -39,11 +39,11 @@ import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
-import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueFeedWorkers
 import io.github.turtlepaw.mindsky.repositories.ProfileRepository
 import io.github.turtlepaw.mindsky.ui.theme.MindskyTheme
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModelFactory
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueuePeriodicFeedWorkers
 
 object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
     private val fastOutExtraSlowIn = CubicBezierEasing(0.05f, 0f, 0.133333f, 1f)
@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                     notifications.launchPermissionRequest()
                 }
 
-                WorkManager.getInstance(this@MainActivity).enqueueFeedWorkers()
+                WorkManager.getInstance(this@MainActivity).enqueuePeriodicFeedWorkers()
             }
 
             // Get API and authTokensFlow from MindskyApplication

@@ -77,6 +77,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.WorkQuery
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
@@ -92,12 +93,14 @@ import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
-import io.github.turtlepaw.mindsky.logic.FeedWorker
-import io.github.turtlepaw.mindsky.logic.FeedWorker.Companion.enqueueImmediateFeedWorker
+import io.github.turtlepaw.mindsky.workers.FeedWorker
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
 import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
+import io.github.turtlepaw.mindsky.workers.SignalProcessingWorker
+import io.github.turtlepaw.mindsky.workers.WorkerManager
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
 import sh.christian.ozone.BlueskyApi
 import java.io.File
 
@@ -123,7 +126,10 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         val stageNameString = progressData.getString("stage") ?: FeedWorker.WorkStage.STARTING.name
         val currentProgressInt = progressData.getInt("progress", 0)
         // Ensure progressFraction is correctly calculated (progress is 0-100)
-        val animatedProgress by animateFloatAsState(targetValue = currentProgressInt / 100f, label = "feedWorkerProgress")
+        val animatedProgress by animateFloatAsState(
+            targetValue = currentProgressInt / 100f,
+            label = "feedWorkerProgress"
+        )
 
         val displayStageName = try {
             FeedWorker.WorkStage.valueOf(stageNameString).displayName
@@ -134,7 +140,9 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         // Determine if progress is indeterminate
         // It's indeterminate if ENQUEUED, or if RUNNING but no "progress" key yet, or if progress is 0 for a non-STARTING stage
         val isIndeterminate = feedWorkerInfo.state == WorkInfo.State.ENQUEUED ||
-                (feedWorkerInfo.state == WorkInfo.State.RUNNING && !progressData.keyValueMap.containsKey("progress")) ||
+                (feedWorkerInfo.state == WorkInfo.State.RUNNING && !progressData.keyValueMap.containsKey(
+                    "progress"
+                )) ||
                 (feedWorkerInfo.state == WorkInfo.State.RUNNING && currentProgressInt == 0 && stageNameString != FeedWorker.WorkStage.STARTING.name && stageNameString != FeedWorker.WorkStage.COMPLETE.name)
 
         Column(
@@ -156,28 +164,14 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
             if (isIndeterminate) {
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
-                LinearWavyProgressIndicator(progress = { animatedProgress }, modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
-
-@Preview
-@Composable
-fun FeedProgressDisplayPreview(){
-    FeedWorkerProgressDisplay(
-        feedWorkerInfo = WorkInfo(
-            id = java.util.UUID.randomUUID(),
-            state = WorkInfo.State.RUNNING,
-            tags = setOf(FeedWorker.IMMEDIATE_WORK_NAME),
-            progress = androidx.work.Data.Builder()
-                .putString("stage", FeedWorker.WorkStage.PROCESSING_POSTS.name)
-                .putInt("progress", 50)
-                .build()
-        )
-    )
-}
-
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Destination<RootGraph>(start = true)
@@ -201,9 +195,14 @@ fun Feed(nav: DestinationsNavigator) {
     var selectedDestination by rememberSaveable { mutableIntStateOf(startDestination.ordinal) }
 
     val workManager = WorkManager.getInstance(context)
-    val workInfos by workManager.getWorkInfosForUniqueWorkLiveData(FeedWorker.IMMEDIATE_WORK_NAME).observeAsState()
+    val workInfos by workManager.getWorkInfosLiveData(
+        WorkQuery.fromTags(
+            FeedWorker::class.java.simpleName,
+            SignalProcessingWorker::class.java.simpleName
+        )
+    ).observeAsState()
     val feedWorkerInfo = remember(workInfos) {
-        workInfos?.find { it.tags.contains(FeedWorker.IMMEDIATE_WORK_NAME) || it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+        workInfos?.firstOrNull { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
     }
 
 

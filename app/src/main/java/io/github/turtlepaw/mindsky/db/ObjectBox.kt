@@ -1,6 +1,7 @@
-package io.github.turtlepaw.mindsky
+package io.github.turtlepaw.mindsky.db
 
 import android.content.Context
+import io.github.turtlepaw.mindsky.MyObjectBox
 import io.objectbox.BoxStore
 
 object ObjectBox {
