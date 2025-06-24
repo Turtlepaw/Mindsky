@@ -58,7 +58,7 @@ object WorkerManager {
         enqueueUniqueWork(
             it.name + FeedWorker::class.java.simpleName,
             existingWorkPolicy,
-            buildOneTimeWorkRequest<FeedWorker>(30)
+            buildOneTimeWorkRequest<FeedWorker>(15)
         )
     }
 

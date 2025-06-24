@@ -8,7 +8,7 @@ import app.bsky.feed.FeedViewPost
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.PostView
 import io.github.turtlepaw.mindsky.db.EmbeddedPost
-import io.github.turtlepaw.mindsky.EmbeddedPost_
+import io.github.turtlepaw.mindsky.db.EmbeddedPost_
 import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.logic.FeedTuner
 import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts

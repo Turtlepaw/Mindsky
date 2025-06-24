@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -234,36 +236,59 @@ fun Feed(nav: DestinationsNavigator) {
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // Error and Loading states for the feed
-            if (error != null) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Error fetching feed: $error",
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                // Feed content (LazyColumn)
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(1f), // Base layer for scrolling content
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(1f), // Base layer for scrolling content
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = if (error != null) Arrangement.Center else Arrangement.Top
+            ) {
+                if (error != null) {
                     item {
-                        // Spacer for fixed TopBarInteractiveElements + ProgressIndicator (approx. 56dp + progress height)
-                        // Adjust this spacer if the progress indicator height changes significantly
-                        Spacer(modifier = Modifier.height(50.dp)) // Increased to accommodate progress display roughly
+                        Icon(
+                            Icons.Rounded.Error,
+                            contentDescription = "Error",
+                            modifier = Modifier.padding(bottom = 12.dp).size(40.dp)
+                        )
+                    }
+                    item {
+                        Text(
+                            text = "Failed to fetch your feed",
+                            //color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    MaterialTheme.shapes.medium
+                                )
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(0.2f),
+                                    MaterialTheme.shapes.medium
+                                )
+                                .padding(16.dp)
+                        ) {
+                            Text(
+                                text = error,
+                            )
+                        }
+                    }
+                } else {
+                    item {
+                        Spacer(modifier = Modifier.height(50.dp))
                     }
                     item {
                         val slideDistancePx = with(LocalDensity.current) { 36.dp.toPx().toInt() }
 
                         AnimatedVisibility(
                             visible = feedWorkerInfo != null &&
-                                    (feedWorkerInfo.state == WorkInfo.State.RUNNING ||
-                                            feedWorkerInfo.state == WorkInfo.State.ENQUEUED),
+                                    feedWorkerInfo.state == WorkInfo.State.RUNNING,
                             enter = fadeIn() + slideInVertically(
                                 initialOffsetY = { -slideDistancePx }  // Starts ABOVE and slides down
                             ),
