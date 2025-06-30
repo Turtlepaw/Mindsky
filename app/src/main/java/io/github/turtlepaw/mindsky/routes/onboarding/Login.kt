@@ -1,4 +1,4 @@
-package io.github.turtlepaw.mindsky.routes
+package io.github.turtlepaw.mindsky.routes.onboarding
 
 import android.content.Intent
 import android.util.Log
@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -37,6 +38,7 @@ import com.atproto.server.CreateSessionRequest
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
+import com.ramcosta.composedestinations.generated.destinations.PdsListDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.MindskyApplication
 import io.github.turtlepaw.mindsky.auth.UserSession
@@ -51,9 +53,11 @@ import sh.christian.ozone.api.response.AtpResponse
 @Destination<RootGraph>
 @Composable
 fun Login(navigator: DestinationsNavigator) {
+    val viewModel = rememberOnboardingViewModel()
+
     var username by remember { mutableStateOf("") }
     var appPassword by remember { mutableStateOf("") }
-    var hostUrl by remember { mutableStateOf("https://bsky.social") }
+    var hostUrl = viewModel.pds
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -74,7 +78,7 @@ fun Login(navigator: DestinationsNavigator) {
         ) {
             Text(
                 "Login to Bluesky",
-                style = androidx.compose.material3.MaterialTheme.typography.headlineMedium
+                style = MaterialTheme.typography.headlineMedium
             )
             Spacer(modifier = Modifier.height(32.dp))
             OutlinedTextField(
@@ -194,10 +198,20 @@ fun Login(navigator: DestinationsNavigator) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in new")
                 }
+                OutlinedButton(
+                    onClick = {
+                        navigator.navigate(PdsListDestination())
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Create an account")
+//                    Spacer(modifier = Modifier.width(8.dp))
+//                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in new")
+                }
             }
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                Text(it, color = MaterialTheme.colorScheme.error)
             }
         }
     }

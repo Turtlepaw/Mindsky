@@ -16,11 +16,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,18 +33,7 @@ fun Settings(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.navigateUp() }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
+            TopAppBarCommon.withBack(navigator, R.string.settings_name)
         }
     ) { paddingValues ->
         LazyColumn(
@@ -61,5 +53,29 @@ fun Settings(navigator: DestinationsNavigator) {
                 }
             }
         }
+    }
+}
+
+object TopAppBarCommon {
+    @Composable
+    @OptIn(ExperimentalMaterial3Api::class)
+    fun withBack(navigator: DestinationsNavigator, title: Int?, titleStyle: TextStyle? = null) {
+        TopAppBar(
+            title = {
+                if (title != null) Text(
+                    stringResource(title),
+                    style = titleStyle ?: TextStyle.Default
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = { navigator.navigateUp() }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
     }
 }

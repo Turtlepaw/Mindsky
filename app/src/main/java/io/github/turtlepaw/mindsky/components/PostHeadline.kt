@@ -21,12 +21,20 @@ import app.bsky.actor.ProfileViewBasic
 import io.github.turtlepaw.mindsky.utils.toRelativeTimeString
 import kotlinx.datetime.Instant
 
+private fun String.nullable(): String? {
+    return if (isNullOrBlank()) {
+        null
+    } else {
+        this
+    }
+}
+
 @Composable
 fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.weight(1f)) { // Added weight here
             Text(
-                text = author.displayName ?: author.handle.handle,
+                text = author.displayName?.nullable() ?: author.handle.handle,
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold
                 ),

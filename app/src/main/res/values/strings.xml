@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">Mindsky</string>
+    <string name="settings_name">Settings</string>
+
+    <!--  Sign in  -->
+    <string name="sign_in_with_provider">Select a provider to sign into</string>
+    <string name="custom_pds">Custom PDS</string>
+
+    <!--  Posts  -->
+    <string name="embed_not_found">Deleted</string>
+    <string name="detached_by_author">Removed by author</string>
+    <string name="unknown_embed">Unknown embed</string>
+    <string name="blocked">Blocked</string>
 </resources>

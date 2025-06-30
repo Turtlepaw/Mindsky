@@ -1,5 +1,6 @@
 package io.github.turtlepaw.mindsky.workers
 
+// FeedWorker import is still needed for buildOneTimeWorkRequest in attachWorkRequests
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -11,7 +12,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import io.github.turtlepaw.mindsky.workers.FeedWorker
 import java.time.Duration
 import java.time.LocalTime
 import java.util.concurrent.TimeUnit
@@ -30,15 +30,12 @@ object WorkerManager {
 
     private fun WorkManager.attachTimedWorkRequests(it: TimedWorkType, existingWorkPolicy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.REPLACE) {
         enqueueUniquePeriodicWork(
-            it.name + SignalProcessingWorker::class.java.simpleName,
+            it.name + SignalProcessingWorker::class.java.simpleName, // Unique name for the periodic SignalProcessingWorker
             existingWorkPolicy,
-            buildPeriodicWorkRequest<SignalProcessingWorker>(it.time)
+            buildPeriodicWorkRequest<SignalProcessingWorker>(it.time) // Only SignalProcessingWorker is scheduled directly as periodic
         )
-        enqueueUniquePeriodicWork(
-            it.name + FeedWorker::class.java.simpleName,
-            existingWorkPolicy,
-            buildPeriodicWorkRequest<FeedWorker>(it.time.plusMinutes(30))
-        )
+        // FeedWorker is no longer enqueued directly as a periodic worker here.
+        // It will be enqueued by SignalProcessingWorker upon its successful completion.
     }
 
     fun WorkManager.enqueueImmediateFeedWorker(
@@ -50,16 +47,18 @@ object WorkerManager {
     }
 
     private fun WorkManager.attachWorkRequests(it: TimedWorkType, existingWorkPolicy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE) {
-        enqueueUniqueWork(
-            it.name + SignalProcessingWorker::class.java.simpleName,
-            existingWorkPolicy,
-            buildOneTimeWorkRequest<SignalProcessingWorker>()
+        val signalProcessingRequest =
+            buildOneTimeWorkRequest<SignalProcessingWorker>() // No delay for SignalProcessingWorker
+        val feedWorkerRequest =
+            buildOneTimeWorkRequest<FeedWorker>(10) // FeedWorker will start 10 minutes AFTER SignalProcessingWorker completes
+
+        this.beginUniqueWork(
+            it.name + "_ImmediateDataSyncChain", // A new unique name for this specific chain
+            existingWorkPolicy, // This policy applies to the entire chain
+            signalProcessingRequest
         )
-        enqueueUniqueWork(
-            it.name + FeedWorker::class.java.simpleName,
-            existingWorkPolicy,
-            buildOneTimeWorkRequest<FeedWorker>(15)
-        )
+            .then(feedWorkerRequest)
+            .enqueue()
     }
 
     private inline fun <reified W: ListenableWorker> WorkManager.buildPeriodicWorkRequest(time: LocalTime? = null): PeriodicWorkRequest {
@@ -94,7 +93,9 @@ object WorkerManager {
             .build()
     }
 
-    private inline fun <reified W: ListenableWorker> WorkManager.buildOneTimeWorkRequest(delay: Long = 0): OneTimeWorkRequest {
+    private inline fun <reified W : ListenableWorker> WorkManager.buildOneTimeWorkRequest(
+        delayMinutes: Long = 0
+    ): OneTimeWorkRequest {
         return OneTimeWorkRequestBuilder<W>()
             .setConstraints(
                 Constraints.Builder()
@@ -103,7 +104,7 @@ object WorkerManager {
                     .build()
             )
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
-            .setInitialDelay(delay, TimeUnit.MINUTES)
+            .setInitialDelay(delayMinutes, TimeUnit.MINUTES) // Changed parameter name for clarity
             .addTag(
                 W::class.java.simpleName
             )

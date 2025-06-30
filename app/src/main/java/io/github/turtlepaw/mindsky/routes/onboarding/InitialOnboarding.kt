@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.generated.destinations.LoginDestination
+import com.ramcosta.composedestinations.generated.destinations.PdsListDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.BouncingStar
 
@@ -82,7 +82,7 @@ fun InitialOnboarding(navigator: DestinationsNavigator) {
                     contentAlignment = Alignment.CenterEnd
                 ) {
                     Button(onClick = {
-                        navigator.navigate(LoginDestination)
+                        navigator.navigate(PdsListDestination)
                     }) {
                         Text("Get Started")
                     }

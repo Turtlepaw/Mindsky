@@ -4,14 +4,22 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement.spacedBy
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -19,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
@@ -44,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.bsky.embed.RecordViewRecordUnion
 import app.bsky.feed.FeedViewPost
 import app.bsky.feed.FeedViewPostReasonUnion
 import app.bsky.feed.Like
@@ -57,9 +67,14 @@ import com.atproto.repo.DeleteRecordRequest
 import com.atproto.repo.StrongRef
 import com.ramcosta.composedestinations.generated.destinations.ImageDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.PostHeadline
+import io.github.turtlepaw.mindsky.components.post.embeds.FeedGraphDisplay
+import io.github.turtlepaw.mindsky.components.post.embeds.InformationalEmbed
+import io.github.turtlepaw.mindsky.components.post.embeds.QuotePost
+import io.github.turtlepaw.mindsky.components.post.embeds.StarterPack
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -86,6 +101,8 @@ fun PostComponent(
     navigator: DestinationsNavigator,
     reason: FeedViewPostReasonUnion? = null,
     discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
+    showActions: Boolean = true,
+    compact: Boolean = false
 ) {
     val author = postView.author
     val postRecord = postView.record.decodeAs<Post>()
@@ -129,66 +146,69 @@ fun PostComponent(
             PostHeadline(postRecord.createdAt, author)
         },
         actions = {
-            FlowRow(it, horizontalArrangement = spacedBy(24.dp)) {
-                var isLiked by remember {
-                    mutableStateOf(postView.viewer?.like != null)
-                }
-                var likeUri by remember {
-                    mutableStateOf(postView.viewer?.like)
-                }
-                val isReposted = postView.viewer?.repost != null
-                PostAction(
-                    label = postView.replyCount,
-                    icon = Icons.Rounded.ChatBubbleOutline,
-                    contentDescription = "Chat Bubble",
-                ) { }
-                PostAction(
-                    label = postView.repostCount,
-                    icon = Icons.Rounded.Repeat,
-                    contentDescription = "Repeat",
-                    isHighlighted = isReposted,
-                ) { }
-                PostAction(
-                    label = (postView.likeCount ?: 0) + if (isLiked) 1 else 0,
-                    icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = "Heart",
-                    isHighlighted = isLiked,
-                ) {
-                    Log.d("PostView", "PostView: $isLiked")
-                    coroutineScope.launch {
-                        val session = SessionManager(context).getSession()
-                        val collection = Nsid("app.bsky.feed.like")
-                        if (isLiked) {
-                            api.deleteRecord(
-                                DeleteRecordRequest(
-                                    collection = collection,
-                                    repo = Did(session!!.did),
-                                    rkey = likeUri!!.getRkey(),
-                                ),
-                            ).requireResponse()
-                            isLiked = false
-                            likeUri = null
-                        } else {
-                            val data = api.createRecord(
-                                CreateRecordRequest(
-                                    record = Json.encodeAsJsonContent(
-                                        Like(
-                                            StrongRef(postView.uri, postView.cid),
-                                            Clock.System.now()
-                                        )
+            if (showActions) {
+                FlowRow(it, horizontalArrangement = spacedBy(24.dp)) {
+                    var isLiked by remember {
+                        mutableStateOf(postView.viewer?.like != null)
+                    }
+                    var likeUri by remember {
+                        mutableStateOf(postView.viewer?.like)
+                    }
+                    val isReposted = postView.viewer?.repost != null
+                    PostAction(
+                        label = postView.replyCount,
+                        icon = Icons.Rounded.ChatBubbleOutline,
+                        contentDescription = "Chat Bubble",
+                    ) { }
+                    PostAction(
+                        label = postView.repostCount,
+                        icon = Icons.Rounded.Repeat,
+                        contentDescription = "Repeat",
+                        isHighlighted = isReposted,
+                    ) { }
+                    PostAction(
+                        label = (postView.likeCount ?: 0) + if (isLiked) 1 else 0,
+                        icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        contentDescription = "Heart",
+                        isHighlighted = isLiked,
+                    ) {
+                        Log.d("PostView", "PostView: $isLiked")
+                        coroutineScope.launch {
+                            val session = SessionManager(context).getSession()
+                            val collection = Nsid("app.bsky.feed.like")
+                            if (isLiked) {
+                                api.deleteRecord(
+                                    DeleteRecordRequest(
+                                        collection = collection,
+                                        repo = Did(session!!.did),
+                                        rkey = likeUri!!.getRkey(),
                                     ),
-                                    repo = Did(session!!.did),
-                                    collection = collection,
-                                )
-                            ).requireResponse()
-                            likeUri = data.uri
-                            isLiked = true
+                                ).requireResponse()
+                                isLiked = false
+                                likeUri = null
+                            } else {
+                                val data = api.createRecord(
+                                    CreateRecordRequest(
+                                        record = Json.encodeAsJsonContent(
+                                            Like(
+                                                StrongRef(postView.uri, postView.cid),
+                                                Clock.System.now()
+                                            )
+                                        ),
+                                        repo = Did(session!!.did),
+                                        collection = collection,
+                                    )
+                                ).requireResponse()
+                                likeUri = data.uri
+                                isLiked = true
+                            }
                         }
                     }
                 }
             }
         },
-        discoveryContext = discoveryContext
+        discoveryContext = discoveryContext,
+        compact = compact
     ) {
         if (postRecord.reply != null) {
             Row {
@@ -405,7 +425,46 @@ fun PostComponent(
                     }
                 }
             }
+            is PostViewEmbedUnion.RecordView -> {
+                val recordEmbed = (postView.embed as PostViewEmbedUnion.RecordView).value
+                val record = recordEmbed.record
 
+                when (record) {
+                    is RecordViewRecordUnion.ViewRecord -> {
+                        QuotePost(record, navigator)
+                    }
+
+                    is RecordViewRecordUnion.FeedGeneratorView -> {
+                        FeedGraphDisplay(record.value)
+                    }
+
+                    is RecordViewRecordUnion.GraphListView -> {
+                        FeedGraphDisplay(record.value)
+                    }
+
+                    is RecordViewRecordUnion.GraphStarterPackViewBasic -> {
+                        StarterPack(record.value)
+                    }
+//                    is RecordViewRecordUnion.LabelerLabelerView -> TODO()
+                    is RecordViewRecordUnion.Unknown -> {
+                        InformationalEmbed(R.string.unknown_embed)
+                    }
+
+                    is RecordViewRecordUnion.ViewBlocked -> {
+                        InformationalEmbed(R.string.blocked)
+                    }
+
+                    is RecordViewRecordUnion.ViewDetached -> {
+                        InformationalEmbed(R.string.detached_by_author)
+                    }
+
+                    is RecordViewRecordUnion.ViewNotFound -> {
+                        InformationalEmbed(R.string.embed_not_found)
+                    }
+
+                    else -> {}
+                }
+            }
             else -> {}
         }
     }
@@ -413,4 +472,57 @@ fun PostComponent(
 
 fun AtUri.getRkey(): RKey {
     return RKey(this.atUri.substringAfterLast("/"))
+}
+
+@Composable
+fun LoadingPost() {
+    val infiniteTransition = rememberInfiniteTransition()
+
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    PostStructure(
+        avatar = {
+            Box(
+                modifier = it
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        CircleShape
+                    )
+            )
+        },
+        headline = {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .fillMaxWidth(0.5f)
+                    .height(10.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        MaterialTheme.shapes.small
+                    )
+            )
+        },
+        metadata = {},
+        actions = {}
+    ) {
+        repeat(3) {
+            Box(
+                modifier = Modifier
+                    .padding(vertical = 4.dp)
+                    .fillMaxWidth(if (it == 2) 0.8f else 0.9f)
+                    .height(9.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        MaterialTheme.shapes.small
+                    )
+            )
+        }
+    }
 }

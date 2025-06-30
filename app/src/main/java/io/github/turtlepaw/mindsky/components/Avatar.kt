@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -23,19 +24,21 @@ fun Avatar(
     modifier: Modifier = Modifier,
     avatarUrl: String? = null,
     contentDescription: String?,
+    clip: Shape = CircleShape,
 ) {
     if (avatarUrl != null) {
         AsyncImage(
             model = avatarUrl,
             contentDescription = contentDescription,
             modifier = modifier.clip(
-                CircleShape
+                clip
             ),
         )
     } else {
         FallbackAvatar(
             modifier = modifier,
             contentDescription = contentDescription,
+            shape = clip,
         )
     }
 }
@@ -44,10 +47,11 @@ fun Avatar(
 private fun FallbackAvatar(
     modifier: Modifier = Modifier,
     contentDescription: String?,
+    shape: Shape = CircleShape,
 ) {
     Box(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.primary, CircleShape),
+            .background(MaterialTheme.colorScheme.primary, shape),
         contentAlignment = Alignment.Center
     ) {
         Text(

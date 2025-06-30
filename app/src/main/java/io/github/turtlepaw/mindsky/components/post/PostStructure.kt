@@ -33,6 +33,7 @@ fun PostStructure(
     metadata: @Composable () -> Unit,
     actions: @Composable (modifier: Modifier) -> Unit,
     discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
+    compact: Boolean = false,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -43,34 +44,37 @@ fun PostStructure(
         ) {
             metadata()
 
+            // Header with avatar and headline
             Row(
-                horizontalArrangement = spacedBy(12.dp)
+                horizontalArrangement = spacedBy(
+                    if (compact) 6.dp else 12.dp
+                ),
+                verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top,
             ) {
                 avatar(
                     Modifier
-                        .size(42.dp)
-                        .align(Alignment.Top)
-                        .offset(y = 2.dp),
+                        .size(if (compact) 20.dp else 42.dp)
+                        .let { if (compact) it else it.offset(y = 2.dp) }
                 )
 
-                Column(
-                    verticalArrangement = Arrangement.Top,
-                    horizontalAlignment = Alignment.Start
-                ) {
+                if (compact) {
                     headline()
-                    content()
-                    actions(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    )
-                    discoveryContext(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                            .padding(horizontal = 4.dp)
-                    )
+                } else {
+                    Column(
+                        verticalArrangement = Arrangement.Top,
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        headline()
+                        content()
+                        PostActionsSection(actions, discoveryContext)
+                    }
                 }
+            }
+
+            // Content section for compact mode
+            if (compact) {
+                content()
+                PostActionsSection(actions, discoveryContext)
             }
         }
         HorizontalDivider(
@@ -78,6 +82,24 @@ fun PostStructure(
             thickness = 0.25.dp
         )
     }
+}
+
+@Composable
+private fun PostActionsSection(
+    actions: @Composable (modifier: Modifier) -> Unit,
+    discoveryContext: @Composable (modifier: Modifier) -> Unit
+) {
+    actions(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+    )
+    discoveryContext(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .padding(horizontal = 4.dp)
+    )
 }
 
 @Composable

@@ -1,11 +1,10 @@
 package io.github.turtlepaw.mindsky.workers
 
-import android.app.Application
 import android.content.Context
 import android.util.Log
-import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.auth.UserSession
+import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.defaultRequest
@@ -14,7 +13,10 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.takeFrom
 import io.objectbox.BoxStore
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import sh.christian.ozone.api.AuthenticatedXrpcBlueskyApi
 import sh.christian.ozone.api.BlueskyAuthPlugin
 
@@ -25,16 +27,16 @@ object WorkerCommon {
     const val PROGRESS = "progress"
     const val STAGE = "stage"
 
+    private val workerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     fun getSession(appContext: Context): UserSession? {
         val sessionManager = SessionManager(appContext)
         return sessionManager.getSession()
     }
 
-    fun getBlueskyApi(currentSession: UserSession): AuthenticatedXrpcBlueskyApi? {
+    fun getBlueskyApi(sessionManager: SessionManager): AuthenticatedXrpcBlueskyApi? {
+        val currentSession = sessionManager.sessionFlow.value ?: return null
         return try {
-            val initialTokens = BlueskyAuthPlugin.Tokens(currentSession.accessToken, currentSession.refreshToken)
-            val authTokensFlow = MutableStateFlow(initialTokens)
-
             val httpClient = HttpClient(OkHttp) {
                 install(Logging) {
                     logger = object : Logger {
@@ -42,17 +44,34 @@ object WorkerCommon {
                             Log.v("Ktor_Default", message)
                         }
                     }
-                    level = LogLevel.HEADERS // Or LogLevel.NONE for less verbosity in production
+                    level = LogLevel.HEADERS
+                }
+                install(BlueskyAuthPlugin) {
+                    // observe session changes
+                    workerScope.launch {
+                        authTokens.collect {
+                            Log.d("BlueskyAuthPlugin", "Auth tokens updated: $it")
+                            val session = sessionManager.getSession()
+                            if (it != null && session != null) {
+                                sessionManager.saveSession(
+                                    session.copy(
+                                        accessToken = it.auth,
+                                        refreshToken = it.refresh,
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
                 defaultRequest {
-                    url.takeFrom(currentSession.host ?: "https://bsky.social")
+                    url.takeFrom(currentSession.host)
                 }
                 expectSuccess = true
             }
 
             AuthenticatedXrpcBlueskyApi(
-                initialTokens = authTokensFlow.value,
-                httpClient = httpClient,
+                httpClient,
+                BlueskyAuthPlugin.Tokens(currentSession.accessToken, currentSession.refreshToken)
             )
         } catch (e: Exception) {
             Log.e("FeedWorker", "Failed to initialize Bluesky API", e)
@@ -64,7 +83,7 @@ object WorkerCommon {
         return if (ObjectBox.store == null) {
             ObjectBox.init(appContext)
         } else {
-            ObjectBox.store
+            ObjectBox.store!!
         }
     }
 }

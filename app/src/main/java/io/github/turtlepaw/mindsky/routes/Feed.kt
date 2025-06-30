@@ -2,14 +2,7 @@ package io.github.turtlepaw.mindsky.routes
 
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandIn
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -42,7 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
@@ -69,8 +61,6 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -90,18 +80,17 @@ import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.TopBarBackground
 import io.github.turtlepaw.mindsky.components.TopBarInteractiveElements
 import io.github.turtlepaw.mindsky.components.post.InsightType
+import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
-import io.github.turtlepaw.mindsky.components.post.PostStructure
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
-import io.github.turtlepaw.mindsky.workers.FeedWorker
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
 import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
+import io.github.turtlepaw.mindsky.workers.FeedWorker
 import io.github.turtlepaw.mindsky.workers.SignalProcessingWorker
-import io.github.turtlepaw.mindsky.workers.WorkerManager
 import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
 import sh.christian.ozone.BlueskyApi
 import java.io.File
@@ -136,7 +125,11 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
         val displayStageName = try {
             FeedWorker.WorkStage.valueOf(stageNameString).displayName
         } catch (e: IllegalArgumentException) {
-            stageNameString // Fallback if stage name is somehow not in enum
+            try {
+                SignalProcessingWorker.Stage.valueOf(stageNameString).displayName
+            } catch (e: IllegalArgumentException) {
+                stageNameString // Fallback if stage name is somehow not in enum
+            }
         }
 
         // Determine if progress is indeterminate
@@ -249,7 +242,9 @@ fun Feed(nav: DestinationsNavigator) {
                         Icon(
                             Icons.Rounded.Error,
                             contentDescription = "Error",
-                            modifier = Modifier.padding(bottom = 12.dp).size(40.dp)
+                            modifier = Modifier
+                                .padding(bottom = 12.dp)
+                                .size(40.dp)
                         )
                     }
                     item {
@@ -520,54 +515,6 @@ fun TopBarButtons(listState: LazyListState, navigator: DestinationsNavigator) {
 
 fun LazyListScope.Loading() {
     items(8, key = { it }) {
-        val infiniteTransition = rememberInfiniteTransition()
-
-        val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.15f,
-            targetValue = 0.1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            )
-        )
-
-        PostStructure(
-            avatar = {
-                Box(
-                    modifier = it
-                        .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            CircleShape
-                        )
-                )
-            },
-            headline = {
-                Box(
-                    modifier = Modifier
-                        .padding(bottom = 8.dp)
-                        .fillMaxWidth(0.5f)
-                        .height(10.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            MaterialTheme.shapes.small
-                        )
-                )
-            },
-            metadata = {},
-            actions = {}
-        ) {
-            repeat(3) {
-                Box(
-                    modifier = Modifier
-                        .padding(vertical = 4.dp)
-                        .fillMaxWidth(if (it == 2) 0.8f else 0.9f)
-                        .height(9.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            MaterialTheme.shapes.small
-                        )
-                )
-            }
-        }
+        LoadingPost()
     }
 }

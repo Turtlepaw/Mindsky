@@ -1,19 +1,25 @@
 package io.github.turtlepaw.mindsky.workers
 
+// import io.github.turtlepaw.mindsky.workers.FeedWorker.Companion.API_REQUEST_LIMIT // Replaced with WorkerCommon
+// import io.github.turtlepaw.mindsky.workers.FeedWorker.Companion.THERMAL_COOLDOWN_MS // Replaced with WorkerCommon
 import android.content.Context
 import android.util.Log
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.bsky.feed.FeedViewPost
 import app.bsky.feed.GetActorLikesQueryParams
 import app.bsky.feed.GetActorLikesResponse
 import app.bsky.feed.Post
+import io.github.turtlepaw.mindsky.auth.SessionManager
+import io.github.turtlepaw.mindsky.auth.UserSession
 import io.github.turtlepaw.mindsky.db.Engagement
 import io.github.turtlepaw.mindsky.db.EngagementType
-import io.github.turtlepaw.mindsky.auth.UserSession
-// import io.github.turtlepaw.mindsky.workers.FeedWorker.Companion.API_REQUEST_LIMIT // Replaced with WorkerCommon
-// import io.github.turtlepaw.mindsky.workers.FeedWorker.Companion.THERMAL_COOLDOWN_MS // Replaced with WorkerCommon
 import io.github.turtlepaw.mindsky.logic.PostEmbedder
 import io.github.turtlepaw.mindsky.logic.ranking.InterestCluster
 import io.github.turtlepaw.mindsky.logic.ranking.InterestClusterer
@@ -23,17 +29,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import sh.christian.ozone.api.AuthenticatedXrpcBlueskyApi
 import sh.christian.ozone.api.Did
-import java.lang.Exception // More specific exceptions can be used if needed
+import java.util.concurrent.TimeUnit
 
 class SignalProcessingWorker(
-    private val appContext: Context, // Made private as it'''s used internally
+    private val appContext: Context, // Made private as it's used internally
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
-    enum class Stage {
-        INITIALIZING,
-        FETCHING_LIKES,
-        PROCESSING_LIKES,
-        COMPLETED
+    enum class Stage(val displayName: String) {
+        INITIALIZING("Initializing"),
+        FETCHING_LIKES("Fetching Likes"),
+        PROCESSING_LIKES("Processing Likes"),
+        COMPLETED("Completed")
     }
 
     private val logTag = "SignalProcessingWorker" // Consistent log tag
@@ -83,34 +89,24 @@ class SignalProcessingWorker(
         box: Box<Engagement>,
         knownUris: MutableSet<String>,
         postEmbedder: PostEmbedder = PostEmbedder(appContext),
+        onProgress: (Int) -> Unit
     ): List<Engagement> {
         if (likeViewsToProcess.isEmpty()) return emptyList()
         val likesToEmbedAndStore = mutableListOf<Engagement>()
         val processedEngagements = mutableListOf<Engagement>() // To store all processed engagements
 
-        for (likeView in likeViewsToProcess) {
+        for (likeView in (likeViewsToProcess.takeLast(150))) {
             if (isStopped) {
                 Log.i(logTag, "Worker stopped during like batch processing.")
                 break // Exit loop if worker is stopped
             }
             try {
                 // Ensure post and post.record are not null
-                val postRecordValue = likeView.post.record?.value
-                if (postRecordValue == null) {
+                val post = likeView.post.record.decodeAs<Post>()
+                if (post == null) {
                     Log.w(logTag, "Skipping like, post record is null: ${likeView.post.uri}")
                     continue // This continue is now directly in the for loop
                 }
-                val postRecord = postRecordValue // Use the non-null value
-                // Ensure it'''s actually a Post object
-                if (postRecord !is Post) {
-                    Log.w(
-                        logTag,
-                        "Skipping like, record is not of type Post: ${likeView.post.uri}, type was ${postRecord::class.simpleName}"
-                    )
-                    continue
-                }
-
-                val post = postRecord // Now smart-cast to Post
 
                 if (post.text.isNullOrBlank()) {
                     // Log.w(logTag, "Skipping like with empty text: ${likeView.post.uri}")
@@ -135,6 +131,13 @@ class SignalProcessingWorker(
                 if (likeView.post.uri.atUri !in knownUris) {
                     likesToEmbedAndStore.add(newVector)
                 }
+
+                onProgress(
+                    (processedEngagements.size * 100) / likeViewsToProcess.size.coerceAtLeast(1)
+                )
+                delay(
+                    2_000L // Delay to prevent overwhelming the API and allow for thermal cooldown
+                )
             } catch (e: Exception) { // Catching more specific exceptions like SerializationException might be better
                 Log.e(logTag, "Error processing like for embedding: ${likeView.post.uri}", e)
             }
@@ -212,42 +215,70 @@ class SignalProcessingWorker(
         Log.d(logTag, "SignalProcessingWorker started.")
         return try {
             val objectBoxStore = WorkerCommon.safelyGetObjectBox(appContext)
-            val session = WorkerCommon.getSession(appContext)
+            val sessionManager = SessionManager(appContext)
+            val session = sessionManager.getSession()
 
             if (session == null) {
                 Log.e(logTag, "No active session found. Worker cannot proceed.")
                 return Result.failure() // Fail if no session is available
             }
 
-            val blueskyApi = WorkerCommon.getBlueskyApi(session)
+            val blueskyApi = WorkerCommon.getBlueskyApi(sessionManager)
             if (blueskyApi !is AuthenticatedXrpcBlueskyApi) {
                 Log.e(logTag, "Bluesky API is not authenticated, cannot proceed.")
                 return Result.failure() // Fail if API is not authenticated
             }
 
-            val (allLikes, knownUris) = initializeLikeData(objectBoxStore.boxFor(Engagement::class.java))
+            val (allLikesFromDb, knownUris) = initializeLikeData(objectBoxStore.boxFor(Engagement::class.java)) 
 
             Log.d(logTag, "Starting to pull likes for user: ${session.did}")
             val likedPosts = getLikes(
                 blueskyApi, session, knownUris, getProgressCallback(
                     Stage.FETCHING_LIKES
                 )
-            ) // This now returns all fetched FeedViewPost objects
+            )
 
-            // Process all fetched likes. The function will handle storing only new ones.
             val allProcessedLikes = processLikesBatch(
                 likedPosts,
                 objectBoxStore.boxFor(Engagement::class.java),
                 knownUris,
-            ) // This now returns a List<Engagement> of all processed likes
-            // `allLikes` (from initializeLikeData) is updated within processLikesBatch via knownUris and box.put
+                onProgress = getProgressCallback(
+                    Stage.PROCESSING_LIKES
+                )
+            )
             val clusterer = InterestClusterer()
-            val userProfile = clusterer.createClusters(allProcessedLikes)
+            val userProfile =
+                clusterer.createClusters(allProcessedLikes) // Ensure this has all data needed
 
             // store clusters
-            objectBoxStore.boxFor(InterestCluster::class.java)
+            val clusterBox = objectBoxStore.boxFor(InterestCluster::class.java)
+            // TODO: Consider removing old clusters for the user before putting new ones
+            // Example:
+            // val oldClustersQuery = clusterBox.query(InterestCluster_.userId.equal(session.did)).build()
+            // oldClustersQuery.remove()
+            // clusterBox.put(userProfile.clusters) // Assuming userProfile.clusters is the collection
 
             Log.d(logTag, "SignalProcessingWorker finished successfully.")
+
+            // Enqueue FeedWorker to run after a delay
+            val feedWorkerRequest = OneTimeWorkRequestBuilder<FeedWorker>()
+                .setInitialDelay(30, TimeUnit.MINUTES) // 30 minutes delay
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.UNMETERED)
+                        .setRequiresBatteryNotLow(true)
+                        .build()
+                )
+                .addTag(FeedWorker::class.java.simpleName) // Optional tag
+                .build()
+
+            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+                "ChainedFeedWorker_From_" + this.id.toString(), // Unique name for this instance of FeedWorker
+                ExistingWorkPolicy.REPLACE, // Or KEEP, depending on desired behavior if SPW runs again
+                feedWorkerRequest
+            )
+            Log.i(logTag, "Enqueued FeedWorker to run in 30 minutes.")
+
             Result.success()
         } catch (e: NotImplementedError) {
             Log.e(logTag, "Worker failed due to unimplemented dependency: ${e.message}", e)
