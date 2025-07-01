@@ -4,12 +4,11 @@ package io.github.turtlepaw.mindsky.workers
 // import io.github.turtlepaw.mindsky.workers.FeedWorker.Companion.THERMAL_COOLDOWN_MS // Replaced with WorkerCommon
 import android.content.Context
 import android.util.Log
-import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.bsky.feed.FeedViewPost
@@ -23,18 +22,25 @@ import io.github.turtlepaw.mindsky.db.EngagementType
 import io.github.turtlepaw.mindsky.logic.PostEmbedder
 import io.github.turtlepaw.mindsky.logic.ranking.InterestCluster
 import io.github.turtlepaw.mindsky.logic.ranking.InterestClusterer
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateWorkers
+import io.github.turtlepaw.mindsky.workers.WorkerManager.getFeedWorkerRequest
 import io.objectbox.Box
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import sh.christian.ozone.api.AuthenticatedXrpcBlueskyApi
 import sh.christian.ozone.api.Did
-import java.util.concurrent.TimeUnit
 
 class SignalProcessingWorker(
     private val appContext: Context, // Made private as it's used internally
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
+    companion object {
+        /**
+         * Flag to indicate if this worker should enqueue the [FeedWorker] after processing.
+         */
+        const val SHOULD_ENQUEUE_FEED_WORKER = "should_enqueue_feed_worker"
+    }
     enum class Stage(val displayName: String) {
         INITIALIZING("Initializing"),
         FETCHING_LIKES("Fetching Likes"),
@@ -210,10 +216,20 @@ class SignalProcessingWorker(
         return@withContext fetchedLikes
     }
 
+    private suspend fun checkIfWorkerAlreadyRunning(): Boolean {
+        val workManager = WorkManager.getInstance(appContext)
+        val existingWork = workManager.getWorkInfos(
+            WorkQuery.fromTags(
+                this::class.java.simpleName
+            )
+        ).get()
+        return existingWork.isNotEmpty() && existingWork[0].state == WorkInfo.State.RUNNING
+    }
 
     override suspend fun doWork(): Result {
         Log.d(logTag, "SignalProcessingWorker started.")
         return try {
+
             val objectBoxStore = WorkerCommon.safelyGetObjectBox(appContext)
             val sessionManager = SessionManager(appContext)
             val session = sessionManager.getSession()
@@ -236,8 +252,20 @@ class SignalProcessingWorker(
                 blueskyApi, session, knownUris, getProgressCallback(
                     Stage.FETCHING_LIKES
                 )
-            )
+            ).filter { like ->
+                like.post.uri.atUri !in allLikesFromDb.map { it.uri }
+            }
 
+            if (checkIfWorkerAlreadyRunning()) {
+                Log.i(logTag, "Another embedding worker is running, skipping...")
+                WorkManager.getInstance(appContext).apply {
+                    enqueueImmediateWorkers()
+                    cancelAllWorkByTag(this::class.java.simpleName)
+                }
+                return Result.success()
+            }
+
+            Log.d(logTag, "Fetched ${likedPosts.size} new likes for user: ${session.did}")
             val allProcessedLikes = processLikesBatch(
                 likedPosts,
                 objectBoxStore.boxFor(Engagement::class.java),
@@ -246,39 +274,38 @@ class SignalProcessingWorker(
                     Stage.PROCESSING_LIKES
                 )
             )
+
             val clusterer = InterestClusterer()
             val userProfile =
                 clusterer.createClusters(allProcessedLikes) // Ensure this has all data needed
 
             // store clusters
-            val clusterBox = objectBoxStore.boxFor(InterestCluster::class.java)
-            // TODO: Consider removing old clusters for the user before putting new ones
-            // Example:
-            // val oldClustersQuery = clusterBox.query(InterestCluster_.userId.equal(session.did)).build()
-            // oldClustersQuery.remove()
-            // clusterBox.put(userProfile.clusters) // Assuming userProfile.clusters is the collection
+            objectBoxStore.boxFor(InterestCluster::class.java).apply {
+                removeAll()
+                put(
+                    userProfile.first
+                )
+            }
 
             Log.d(logTag, "SignalProcessingWorker finished successfully.")
 
             // Enqueue FeedWorker to run after a delay
-            val feedWorkerRequest = OneTimeWorkRequestBuilder<FeedWorker>()
-                .setInitialDelay(30, TimeUnit.MINUTES) // 30 minutes delay
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.UNMETERED)
-                        .setRequiresBatteryNotLow(true)
-                        .build()
-                )
-                .addTag(FeedWorker::class.java.simpleName) // Optional tag
-                .build()
-
-            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-                "ChainedFeedWorker_From_" + this.id.toString(), // Unique name for this instance of FeedWorker
-                ExistingWorkPolicy.REPLACE, // Or KEEP, depending on desired behavior if SPW runs again
-                feedWorkerRequest
+            val shouldEnqueueFeedWorker = inputData.getBoolean(
+                SHOULD_ENQUEUE_FEED_WORKER, true
             )
-            Log.i(logTag, "Enqueued FeedWorker to run in 30 minutes.")
 
+            if (shouldEnqueueFeedWorker) {
+                WorkManager.getInstance(applicationContext).apply {
+                    val request = getFeedWorkerRequest(8)
+                    enqueueUniqueWork(
+                        "FeedWorker_Periodic_Chained",
+                        ExistingWorkPolicy.REPLACE,
+                        request
+                    )
+                }
+            }
+
+            Log.i(logTag, "Enqueued FeedWorker to run.")
             Result.success()
         } catch (e: NotImplementedError) {
             Log.e(logTag, "Worker failed due to unimplemented dependency: ${e.message}", e)

@@ -10,6 +10,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -24,7 +25,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
-import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateWorkers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -46,7 +47,7 @@ fun Settings(navigator: DestinationsNavigator) {
             item {
                 Button(
                     onClick = {
-                        WorkManager.getInstance(context).enqueueImmediateFeedWorker()
+                        WorkManager.getInstance(context).enqueueImmediateWorkers()
                     }
                 ) {
                     Text("Launch embedding")
@@ -64,7 +65,7 @@ object TopAppBarCommon {
             title = {
                 if (title != null) Text(
                     stringResource(title),
-                    style = titleStyle ?: TextStyle.Default
+                    style = titleStyle ?: MaterialTheme.typography.titleLarge
                 )
             },
             navigationIcon = {

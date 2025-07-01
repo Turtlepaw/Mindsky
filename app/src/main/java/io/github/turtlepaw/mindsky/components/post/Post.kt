@@ -46,8 +46,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -91,8 +93,18 @@ import java.nio.charset.StandardCharsets
 fun PostComponent(
     postView: FeedViewPost,
     navigator: DestinationsNavigator,
+    density: PostDensity = PostDensity.Regular,
+    enabled: Boolean = true,
+    onClick: () -> Unit
 ) {
-    PostComponent(postView.post, navigator, postView.reason)
+    PostComponent(
+        postView.post,
+        navigator,
+        postView.reason,
+        onClick = onClick,
+        enabled = enabled,
+        density = density
+    )
 }
 
 @Composable
@@ -102,13 +114,16 @@ fun PostComponent(
     reason: FeedViewPostReasonUnion? = null,
     discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
     showActions: Boolean = true,
-    compact: Boolean = false
+    density: PostDensity = PostDensity.Regular,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
 ) {
     val author = postView.author
     val postRecord = postView.record.decodeAs<Post>()
     val api = LocalMindskyApi.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
 
     PostStructure(
         metadata = {
@@ -143,7 +158,7 @@ fun PostComponent(
             )
         },
         headline = {
-            PostHeadline(postRecord.createdAt, author)
+            PostHeadline(postRecord.createdAt, author, density)
         },
         actions = {
             if (showActions) {
@@ -155,18 +170,18 @@ fun PostComponent(
                         mutableStateOf(postView.viewer?.like)
                     }
                     val isReposted = postView.viewer?.repost != null
-                    PostAction(
+                    PostAction.Button(
                         label = postView.replyCount,
                         icon = Icons.Rounded.ChatBubbleOutline,
                         contentDescription = "Chat Bubble",
                     ) { }
-                    PostAction(
+                    PostAction.Button(
                         label = postView.repostCount,
                         icon = Icons.Rounded.Repeat,
                         contentDescription = "Repeat",
                         isHighlighted = isReposted,
                     ) { }
-                    PostAction(
+                    PostAction.Button(
                         label = (postView.likeCount ?: 0) + if (isLiked) 1 else 0,
                         icon = if (isLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                         contentDescription = "Heart",
@@ -202,13 +217,20 @@ fun PostComponent(
                                 likeUri = data.uri
                                 isLiked = true
                             }
+
+                            haptics.performHapticFeedback(
+                                if (isLiked) HapticFeedbackType.ContextClick
+                                else HapticFeedbackType.TextHandleMove
+                            )
                         }
                     }
                 }
             }
         },
         discoveryContext = discoveryContext,
-        compact = compact
+        density = density,
+        onClick = if (enabled) onClick else null,
+        createdAt = postRecord.createdAt
     ) {
         if (postRecord.reply != null) {
             Row {
@@ -510,7 +532,8 @@ fun LoadingPost() {
             )
         },
         metadata = {},
-        actions = {}
+        actions = {},
+        createdAt = Clock.System.now()
     ) {
         repeat(3) {
             Box(

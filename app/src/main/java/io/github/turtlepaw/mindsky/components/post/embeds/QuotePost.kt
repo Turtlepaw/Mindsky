@@ -13,9 +13,11 @@ import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.PostView
 import com.atproto.repo.GetRecordQueryParams
 import com.atproto.repo.StrongRef
+import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
+import io.github.turtlepaw.mindsky.components.post.PostDensity
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import kotlinx.coroutines.launch
 import sh.christian.ozone.api.AtIdentifier
@@ -57,8 +59,10 @@ fun QuotePost(record: RecordViewRecordUnion.ViewRecord, navigator: DestinationsN
                 postRecord!!,
                 navigator,
                 showActions = false,
-                compact = true
-            )
+                density = PostDensity.Compact
+            ) {
+                navigator.navigate(FullsizePostDestination(postRecord!!.uri.atUri))
+            }
         } else {
             //TODO: show failed
         }

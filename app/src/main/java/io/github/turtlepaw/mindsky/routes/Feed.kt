@@ -66,13 +66,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkQuery
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
+import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
 import com.ramcosta.composedestinations.generated.destinations.ProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
@@ -83,7 +83,7 @@ import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
-import io.github.turtlepaw.mindsky.di.LocalMindskyApi
+import io.github.turtlepaw.mindsky.di.LocalFeedModel
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.logic.ModelDownloadWorker
 import io.github.turtlepaw.mindsky.replaceCurrent
@@ -91,7 +91,7 @@ import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
 import io.github.turtlepaw.mindsky.workers.FeedWorker
 import io.github.turtlepaw.mindsky.workers.SignalProcessingWorker
-import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateFeedWorker
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateWorkers
 import sh.christian.ozone.BlueskyApi
 import java.io.File
 
@@ -173,12 +173,10 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
 @Composable
 fun Feed(nav: DestinationsNavigator) {
     val context = LocalContext.current
-    val api = LocalMindskyApi.current
+    val viewModel = LocalFeedModel.current
     val listState = rememberLazyListState()
 
     var lastFetchTime by remember { mutableStateOf(0L) }
-
-    val viewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(api))
 
     val followingFeedData = viewModel.followingFeed.value
     val forYouFeedData = viewModel.forYouFeed.value
@@ -329,7 +327,9 @@ fun Feed(nav: DestinationsNavigator) {
                     if (selectedDestination == 0) {
                         if (followingFeedData != null) {
                             items(followingFeedData) {
-                                PostComponent(it, nav)
+                                PostComponent(it, nav) {
+                                    nav.navigate(FullsizePostDestination(it.post.uri.atUri))
+                                }
                             }
                             item {
                                 LaunchedEffect(Unit) {
@@ -353,7 +353,9 @@ fun Feed(nav: DestinationsNavigator) {
                                         InsightType.Score,
                                         modifier
                                     )
-                                })
+                                }) {
+                                    nav.navigate(FullsizePostDestination(it.second.uri.atUri))
+                                }
                             }
                         } else if (forYouFeedData != null && forYouFeedData.isEmpty()) {
                             item {
@@ -372,7 +374,7 @@ fun Feed(nav: DestinationsNavigator) {
                                 Button(
                                     onClick = {
                                         WorkManager.getInstance(context)
-                                            .enqueueImmediateFeedWorker()
+                                            .enqueueImmediateWorkers()
                                     }
                                 ) {
                                     Text("Generate For You Feed")

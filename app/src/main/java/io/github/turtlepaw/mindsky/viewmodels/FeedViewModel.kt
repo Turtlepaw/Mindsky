@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.bsky.feed.FeedViewPost
+import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.PostView
 import io.github.turtlepaw.mindsky.db.EmbeddedPost
@@ -15,6 +16,7 @@ import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts
 import io.objectbox.Box
 import kotlinx.coroutines.launch
 import sh.christian.ozone.BlueskyApi
+import sh.christian.ozone.api.AtUri
 import kotlin.random.Random
 
 class FeedViewModel(
@@ -39,6 +41,22 @@ class FeedViewModel(
 
     init {
         fetchFeed()
+    }
+
+    suspend fun getPost(uri: String): PostView {
+        val followingMatch = followingFeed.value?.find { it.post.uri.atUri == uri }
+        val forYouMatch = forYouFeed.value?.find { it.first.uri == uri }
+        return if (followingMatch != null) {
+            followingMatch.post
+        } else if (forYouMatch != null) {
+            forYouMatch.second
+        } else {
+            api.getPosts(
+                GetPostsQueryParams(
+                    uris = listOf(AtUri(uri))
+                )
+            ).requireResponse().posts.first()
+        }
     }
 
     fun fetchFeed(limit: Long = 100, isRefresh: Boolean = false) {

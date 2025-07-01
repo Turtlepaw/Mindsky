@@ -10,5 +10,8 @@
     <string name="embed_not_found">Deleted</string>
     <string name="detached_by_author">Removed by author</string>
     <string name="unknown_embed">Unknown embed</string>
+
+    <!--  General  -->
     <string name="blocked">Blocked</string>
+    <string name="post">Post</string>
 </resources>

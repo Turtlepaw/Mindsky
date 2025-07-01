@@ -382,7 +382,7 @@ class FeedWorker(
             val postScoreBox = objectBox.boxFor(PostScore::class.java)
             val engagementBox = objectBox.boxFor(Engagement::class.java)
             val interestCluster = objectBox.boxFor(InterestCluster::class.java)
-            val allEmbeddings = interestCluster.all
+            val allInterestClusters = interestCluster.all
             val allEngagements = engagementBox.all
 
             postScoreBox.removeAll()
@@ -439,7 +439,7 @@ class FeedWorker(
                         )
                         val score = PostRanker.scorePost(
                             embeddedPost,
-                            MultiInterestUserProfile.fromInterestClusters(allEmbeddings),
+                            MultiInterestUserProfile.fromInterestClusters(allInterestClusters),
                             allEngagements
                         )
                         batchToStore.add(score)

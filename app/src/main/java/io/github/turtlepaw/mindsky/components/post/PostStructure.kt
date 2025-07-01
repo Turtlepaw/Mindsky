@@ -6,25 +6,28 @@ import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.github.turtlepaw.mindsky.utils.Formatters
+import kotlinx.datetime.toJavaInstant
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+enum class PostDensity {
+    Compact,
+    Regular,
+    Expanded
+}
 
 @Composable
 fun PostStructure(
@@ -33,129 +36,107 @@ fun PostStructure(
     metadata: @Composable () -> Unit,
     actions: @Composable (modifier: Modifier) -> Unit,
     discoveryContext: @Composable (modifier: Modifier) -> Unit = {},
-    compact: Boolean = false,
+    density: PostDensity = PostDensity.Regular,
+    onClick: (() -> Unit)? = null,
+    createdAt: kotlinx.datetime.Instant,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
+    CompositionLocalProvider(
+        LocalPostDensity provides density
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-        ) {
-            metadata()
-
-            // Header with avatar and headline
-            Row(
-                horizontalArrangement = spacedBy(
-                    if (compact) 6.dp else 12.dp
-                ),
-                verticalAlignment = if (compact) Alignment.CenterVertically else Alignment.Top,
-            ) {
-                avatar(
-                    Modifier
-                        .size(if (compact) 20.dp else 42.dp)
-                        .let { if (compact) it else it.offset(y = 2.dp) }
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable { onClick() }
+                    } else {
+                        Modifier
+                    }
                 )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+            ) {
+                metadata()
 
-                if (compact) {
-                    headline()
-                } else {
-                    Column(
-                        verticalArrangement = Arrangement.Top,
-                        horizontalAlignment = Alignment.Start
-                    ) {
+                // Header with avatar and headline
+                Row(
+                    horizontalArrangement = spacedBy(
+                        if (density == PostDensity.Compact) 6.dp else 12.dp
+                    ),
+                    verticalAlignment = if (density == PostDensity.Compact) Alignment.CenterVertically else Alignment.Top,
+                ) {
+                    avatar(
+                        Modifier
+                            .size(if (density == PostDensity.Compact) 20.dp else 42.dp)
+                            .let { if (density == PostDensity.Compact) it else it.offset(y = 2.dp) }
+                    )
+
+                    if (density == PostDensity.Compact || density == PostDensity.Expanded) {
                         headline()
-                        content()
-                        PostActionsSection(actions, discoveryContext)
+                    } else {
+                        Column(
+                            verticalArrangement = Arrangement.Top,
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            headline()
+                            content()
+                            if (density != PostDensity.Expanded) PostAction.Section(
+                                actions,
+                                discoveryContext
+                            )
+                        }
                     }
                 }
+
+                // Content section for compact mode
+                if (density == PostDensity.Compact || density == PostDensity.Expanded) {
+                    if (density == PostDensity.Expanded) Spacer(
+                        modifier = Modifier.size(10.dp)
+                    )
+
+                    content()
+                    PostAction.Section(actions, discoveryContext)
+                }
             }
-
-            // Content section for compact mode
-            if (compact) {
-                content()
-                PostActionsSection(actions, discoveryContext)
+            if (density == PostDensity.Expanded) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 26.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        createdAt.toJavaInstant().toFormattedString()
+                    )
+                }
             }
-        }
-        HorizontalDivider(
-            modifier = Modifier.fillMaxWidth(),
-            thickness = 0.25.dp
-        )
-    }
-}
-
-@Composable
-private fun PostActionsSection(
-    actions: @Composable (modifier: Modifier) -> Unit,
-    discoveryContext: @Composable (modifier: Modifier) -> Unit
-) {
-    actions(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-    )
-    discoveryContext(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .padding(horizontal = 4.dp)
-    )
-}
-
-@Composable
-fun PostAction(
-    label: Long?,
-    icon: ImageVector,
-    contentDescription: String,
-    isHighlighted: Boolean = false,
-    onClick: () -> Unit,
-) {
-    PostAction(
-        label = label?.toFloat(),
-        icon = icon,
-        contentDescription = contentDescription,
-        isHighlighted = isHighlighted,
-        onClick = onClick
-    )
-}
-
-@Composable
-fun PostAction(
-    label: Float?,
-    icon: ImageVector,
-    contentDescription: String,
-    isHighlighted: Boolean = false,
-    onClick: () -> Unit,
-){
-    Box(
-        modifier = Modifier
-            .sizeIn()
-            .clip(CircleShape)
-            .clickable(onClick = onClick)
-            .padding(4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = spacedBy(4.dp),
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-            )
-            if (label != null && label > 0) {
-                Text(
-                    text = Formatters.formatNumberForLocale(label.toInt()),
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = if (isHighlighted) FontWeight.SemiBold else FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+            HorizontalDivider(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (density == PostDensity.Expanded) Modifier.padding(horizontal = 12.dp) else Modifier
                     ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                thickness = 0.25.dp
+            )
+            if (density == PostDensity.Expanded) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 26.dp, vertical = 10.dp)
+                ) {
+                    PostAction.Section(actions, discoveryContext)
+                }
+                HorizontalDivider(
+                    modifier = Modifier.fillMaxWidth(),
+                    thickness = 0.25.dp
                 )
             }
         }
     }
+}
+
+fun Instant.toFormattedString(zoneId: ZoneId = ZoneId.systemDefault()): String {
+    val formatter = DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' h:mma")
+    return this.atZone(zoneId)
+        .toLocalDateTime()
+        .format(formatter)
 }

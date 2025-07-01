@@ -36,13 +36,14 @@ import androidx.compose.ui.unit.dp
 import app.bsky.feed.PostView
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import io.github.turtlepaw.mindsky.db.Engagement
-import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
+import io.github.turtlepaw.mindsky.db.Engagement
+import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts
@@ -169,8 +170,10 @@ fun Profile(navigator: DestinationsNavigator) {
                                 InsightType.Vector,
                                 modifier
                             )
-                        }
-                    )
+                        },
+                    ) {
+                        navigator.navigate(FullsizePostDestination(it.second.uri.atUri))
+                    }
                 }
             } else {
                 Loading()

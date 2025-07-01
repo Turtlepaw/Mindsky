@@ -36,11 +36,14 @@ import com.ramcosta.composedestinations.generated.destinations.FeedDestination
 import com.ramcosta.composedestinations.generated.destinations.InitialOnboardingDestination
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
+import io.github.turtlepaw.mindsky.di.LocalFeedModel
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
 import io.github.turtlepaw.mindsky.repositories.ProfileRepository
+import io.github.turtlepaw.mindsky.routes.FeedViewModelFactory
 import io.github.turtlepaw.mindsky.ui.theme.MindskyTheme
+import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModelFactory
 import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueuePeriodicFeedWorkers
@@ -50,7 +53,7 @@ object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
     private val slideDistancePx = 96
 
     private val enterDuration = 340
-    private val exitDuration = 200
+    private val exitDuration = 190
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(
@@ -132,12 +135,14 @@ class MainActivity : ComponentActivity() {
                     rememberedSessionManager
                 )
             )
+            val feedViewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(blueskyApi))
 
             CompositionLocalProvider(
                 LocalMindskyApi provides blueskyApi, // Use API from Application
                 LocalSessionManager provides rememberedSessionManager,
                 LocalAuthTokensFlow provides authTokensFlow,
                 LocalProfileModel provides viewModel,
+                LocalFeedModel provides feedViewModel
             ) {
                 MindskyTheme {
                     Box(

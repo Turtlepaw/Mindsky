@@ -1,5 +1,7 @@
 package io.github.turtlepaw.mindsky.components
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.bsky.actor.ProfileViewBasic
+import io.github.turtlepaw.mindsky.components.post.PostDensity
 import io.github.turtlepaw.mindsky.utils.toRelativeTimeString
 import kotlinx.datetime.Instant
 
@@ -30,40 +33,35 @@ private fun String.nullable(): String? {
 }
 
 @Composable
-fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
+fun PostHeadline(timestamp: Instant, author: ProfileViewBasic, density: PostDensity) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.weight(1f)) { // Added weight here
-            Text(
-                text = author.displayName?.nullable() ?: author.handle.handle,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            if(author.verification?.verifications?.isNotEmpty() == true){
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = "Verified",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(23.dp)
-                        .padding(horizontal = 2.dp)
-                        .align(Alignment.CenterVertically)
-                )
+        Box(modifier = Modifier.weight(1f)) {
+            if (density == PostDensity.Expanded) {
+                Column {
+                    AuthorNameWithVerification(author)
+                    Text(
+                        text = "@${author.handle.handle}",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             } else {
-                Spacer(modifier = Modifier.size(5.dp))
+                Row {
+                    AuthorNameWithVerification(author)
+                    if (author.verification?.verifications?.isNotEmpty() != true) {
+                        Spacer(modifier = Modifier.size(5.dp))
+                    }
+                    Text(
+                        text = "@${author.handle.handle}",
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-
-            Text(
-                text = "@${author.handle.handle}",
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontWeight = FontWeight.Normal
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
 
         Spacer(modifier = Modifier.width(5.dp))
@@ -71,9 +69,31 @@ fun PostHeadline(timestamp: Instant, author: ProfileViewBasic) {
         Text(
             text = timestamp.toRelativeTimeString(),
             style = MaterialTheme.typography.titleSmall.copy(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                fontWeight = FontWeight.Normal
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
             )
         )
+    }
+}
+
+@Composable
+private fun AuthorNameWithVerification(author: ProfileViewBasic) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = author.displayName?.nullable() ?: author.handle.handle,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+
+        if (author.verification?.verifications?.isNotEmpty() == true) {
+            Icon(
+                imageVector = Icons.Rounded.CheckCircle,
+                contentDescription = "Verified",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(23.dp)
+                    .padding(horizontal = 2.dp)
+            )
+        }
     }
 }
