@@ -1,11 +1,11 @@
 package io.github.turtlepaw.mindsky.workers
 
-import android.R
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
@@ -117,7 +117,7 @@ class FeedWorker(
         return NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_popup_sync)
+            .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setOngoing(ongoing)
             .setOnlyAlertOnce(true)
             .setProgress(
@@ -265,247 +265,279 @@ class FeedWorker(
 
     override suspend fun doWork(): Result = coroutineScope {
         val startTimeMillis = System.currentTimeMillis()
-        try {
-            Log.i(
-                "FeedWorker",
-                "doWork: Starting FeedWorker execution. Max duration: ${TEN_MINUTES_MS / 60000} min."
-            )
-            updateProgressNotification(WorkStage.STARTING, 0, indeterminate = true)
 
-            if (isStopped) {
-                Log.i("FeedWorker", "doWork: Worker stopped at start.")
-                return@coroutineScope Result.failure()
-            }
-            if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
-                Log.i("FeedWorker", "doWork: Worker timed out (10 min) at start.")
-                updateProgressNotification(WorkStage.COMPLETE, 100)
-                return@coroutineScope Result.success()
+        val wakeLock: PowerManager.WakeLock =
+            (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FeedWorker::MainWakeLock")
             }
 
-            updateProgressNotification(WorkStage.CONNECTING_API, 0, indeterminate = true)
-            val sessionManager = SessionManager(appContext)
-            val api = WorkerCommon.getBlueskyApi(sessionManager)
-            if (api == null) {
-                Log.e("FeedWorker", "Bluesky API not initialized")
-                return@coroutineScope Result.failure()
-            }
-            updateProgressNotification(WorkStage.CONNECTING_API, 100, indeterminate = false)
+        wakeLock.run {
+            try {
+                acquire(10 * 60 * 1000L /*10 minutes*/)
 
-            if (isStopped) {
-                Log.i("FeedWorker", "doWork: Worker stopped after API init.")
-                return@coroutineScope Result.failure()
-            }
-            if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
-                Log.i("FeedWorker", "doWork: Worker timed out (10 min) after API init.")
-                updateProgressNotification(WorkStage.COMPLETE, 100)
-                return@coroutineScope Result.success()
-            }
+                Log.i(
+                    "FeedWorker",
+                    "doWork: Starting FeedWorker execution. Max duration: ${TEN_MINUTES_MS / 60000} min."
+                )
+                updateProgressNotification(WorkStage.STARTING, 0, indeterminate = true)
 
-
-            val postEmbedder = try {
-                PostEmbedder(appContext)
-            } catch (e: Exception) {
-                Log.e("FeedWorker", "Failed to initialize PostEmbedder", e)
-                return@coroutineScope Result.failure()
-            }
-
-            if (isStopped) {
-                Log.i("FeedWorker", "doWork: Worker stopped after PostEmbedder init.")
-                return@coroutineScope Result.failure()
-            }
-            if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
-                Log.i("FeedWorker", "doWork: Worker timed out (10 min) after PostEmbedder init.")
-                updateProgressNotification(WorkStage.COMPLETE, 100)
-                return@coroutineScope Result.success()
-            }
-
-            val objectBox =
-                if (ObjectBox.store == null) ObjectBox.init(appContext) else ObjectBox.store
-            val currentSession = SessionManager(appContext).getSession()
-            if (currentSession == null) {
-                Log.e("FeedWorker", "User session not found.")
-                return@coroutineScope Result.failure()
-            }
-
-            updateProgressNotification(WorkStage.FETCHING_TIMELINE, 0, indeterminate = true)
-            val familiarFeedDeferred = async(Dispatchers.IO) {
-                Log.i("FeedWorker", "Starting getFamiliarFeeds async block...")
-                getFamiliarFeeds(
-                    api = api,
-                    onTimelineProgress = { fetchedCount, targetCount ->
-                        val progress =
-                            if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(100) else 0
-                        updateProgressNotification(
-                            WorkStage.FETCHING_TIMELINE,
-                            progress,
-                            indeterminate = false
-                        )
-                    },
-                    onDiscoveryProgress = { fetchedCount, targetCount ->
-                        val progress =
-                            if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(100) else 0
-                        updateProgressNotification(
-                            WorkStage.FETCHING_DISCOVERY,
-                            progress,
-                            indeterminate = false
-                        )
-                    }
-                ).also {
-                    Log.i(
-                        "FeedWorker",
-                        "getFamiliarFeeds completed. Fetched ${it.size} posts."
-                    )
-                }
-            }
-
-            val familiarFeed = familiarFeedDeferred.await()
-            if (isStopped) {
-                Log.i("FeedWorker", "doWork: Worker stopped after familiarFeed.await().")
-                return@coroutineScope Result.failure()
-            }
-            if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
-                Log.i("FeedWorker", "doWork: Worker timed out (10 min) after familiarFeed.await().")
-                updateProgressNotification(WorkStage.FETCHING_DISCOVERY, 100, false)
-                updateProgressNotification(WorkStage.COMPLETE, 100)
-                return@coroutineScope Result.success()
-            }
-            updateProgressNotification(WorkStage.FETCHING_DISCOVERY, 100, indeterminate = false)
-
-            val totalPostsToProcess = familiarFeed.size
-            Log.i("FeedWorker", "Total posts to process: $totalPostsToProcess")
-            updateProgressNotification(
-                WorkStage.PROCESSING_POSTS,
-                0,
-                indeterminate = totalPostsToProcess == 0
-            )
-
-            val postScoreBox = objectBox.boxFor(PostScore::class.java)
-            val engagementBox = objectBox.boxFor(Engagement::class.java)
-            val interestCluster = objectBox.boxFor(InterestCluster::class.java)
-            val allInterestClusters = interestCluster.all
-            val allEngagements = engagementBox.all
-
-            postScoreBox.removeAll()
-            Log.i("FeedWorker", "Cleared existing PostScore data.")
-
-            val batchToStore = mutableListOf<PostScore>()
-
-            for ((globalIndex, feedViewPost) in familiarFeed.withIndex()) {
                 if (isStopped) {
-                    Log.i("FeedWorker", "doWork: Worker stopped during post processing loop.")
-                    if (batchToStore.isNotEmpty()) {
-                        try {
-                            postScoreBox.put(batchToStore.sortedByDescending { it.finalScore!! + (Random.Default.nextFloat() * 0.1f) })
-                        } catch (e: Exception) {
-                            Log.e("FeedWorker", "Error storing final partial batch on stop", e)
-                        }
-                    }
+                    Log.i("FeedWorker", "doWork: Worker stopped at start.")
                     return@coroutineScope Result.failure()
                 }
-
                 if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
-                    Log.i("FeedWorker", "doWork: Worker timed out (10 min) during post processing.")
-                    if (batchToStore.isNotEmpty()) {
-                        try {
-                            postScoreBox.put(batchToStore.sortedByDescending { it.finalScore!! + (Random.Default.nextFloat() * 0.1f) })
-                        } catch (e: Exception) {
-                            Log.e("FeedWorker", "Error storing final partial batch on timeout", e)
-                        }
-                    }
-                    updateProgressNotification(WorkStage.UPDATING_DATABASE, 100, false)
+                    Log.i("FeedWorker", "doWork: Worker timed out (10 min) at start.")
                     updateProgressNotification(WorkStage.COMPLETE, 100)
-                    Log.i("FeedWorker", "doWork: Sync ended due to timeout.")
                     return@coroutineScope Result.success()
                 }
 
-                val currentPostProgress =
-                    if (totalPostsToProcess > 0) ((globalIndex + 1) * 100 / totalPostsToProcess) else 0
-                updateProgressNotification(WorkStage.PROCESSING_POSTS, currentPostProgress)
+                updateProgressNotification(WorkStage.CONNECTING_API, 0, indeterminate = true)
+                val sessionManager = SessionManager(appContext)
+                val api = WorkerCommon.getBlueskyApi(sessionManager)
+                if (api == null) {
+                    Log.e("FeedWorker", "Bluesky API not initialized")
+                    return@coroutineScope Result.failure()
+                }
+                updateProgressNotification(WorkStage.CONNECTING_API, 100, indeterminate = false)
 
-                var performedEmbeddingCycle = false
-                try {
-                    val postView = feedViewPost.post
-                    val post = postView.record.decodeAs<Post>()
-                    if (post.text != null && post.text.isNotBlank()) {
-                        performedEmbeddingCycle = true
-                        val embedding = postEmbedder.encode(post.text)
-                        val embeddedPost = EmbeddedPost(
-                            uri = postView.uri.atUri,
-                            text = post.text,
-                            embedding = embedding,
-                            authorDid = postView.author.did.did,
-                            createdAt = post.createdAt.epochSeconds,
-                            score = 0f
-                        )
-                        val score = PostRanker.scorePost(
-                            embeddedPost,
-                            MultiInterestUserProfile.fromInterestClusters(allInterestClusters),
-                            allEngagements
-                        )
-                        batchToStore.add(score)
-                    }
-                } catch (e: Exception) {
-                    Log.e("FeedWorker", "Error processing post ${feedViewPost.post.uri}", e)
+                if (isStopped) {
+                    Log.i("FeedWorker", "doWork: Worker stopped after API init.")
+                    return@coroutineScope Result.failure()
+                }
+                if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
+                    Log.i("FeedWorker", "doWork: Worker timed out (10 min) after API init.")
+                    updateProgressNotification(WorkStage.COMPLETE, 100)
+                    return@coroutineScope Result.success()
                 }
 
-                if (batchToStore.size >= PROCESSING_BATCH_SIZE || globalIndex == familiarFeed.size - 1) {
-                    if (batchToStore.isNotEmpty()) {
-                        try {
-                            val sortedBatch =
-                                batchToStore.sortedByDescending { it.finalScore + (Random.Default.nextFloat() * 0.1f) }
-                            postScoreBox.put(sortedBatch)
-                            Log.d(
-                                "FeedWorker",
-                                "Stored batch of ${batchToStore.size} posts to ObjectBox."
-                            )
-                            batchToStore.clear()
-                            val dbProgress =
-                                if (totalPostsToProcess > 0) ((globalIndex + 1) * 100 / totalPostsToProcess.coerceAtLeast(
-                                    1
-                                )) else 100
+
+                val postEmbedder = try {
+                    PostEmbedder(appContext)
+                } catch (e: Exception) {
+                    Log.e("FeedWorker", "Failed to initialize PostEmbedder", e)
+                    return@coroutineScope Result.failure()
+                }
+
+                if (isStopped) {
+                    Log.i("FeedWorker", "doWork: Worker stopped after PostEmbedder init.")
+                    return@coroutineScope Result.failure()
+                }
+                if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
+                    Log.i(
+                        "FeedWorker",
+                        "doWork: Worker timed out (10 min) after PostEmbedder init."
+                    )
+                    updateProgressNotification(WorkStage.COMPLETE, 100)
+                    return@coroutineScope Result.success()
+                }
+
+                val objectBox =
+                    if (ObjectBox.store == null) ObjectBox.init(appContext) else ObjectBox.store
+                val currentSession = SessionManager(appContext).getSession()
+                if (currentSession == null) {
+                    Log.e("FeedWorker", "User session not found.")
+                    return@coroutineScope Result.failure()
+                }
+
+                updateProgressNotification(WorkStage.FETCHING_TIMELINE, 0, indeterminate = true)
+                val familiarFeedDeferred = async(Dispatchers.IO) {
+                    Log.i("FeedWorker", "Starting getFamiliarFeeds async block...")
+                    getFamiliarFeeds(
+                        api = api,
+                        onTimelineProgress = { fetchedCount, targetCount ->
+                            val progress =
+                                if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(
+                                    100
+                                ) else 0
                             updateProgressNotification(
-                                WorkStage.UPDATING_DATABASE,
-                                dbProgress,
+                                WorkStage.FETCHING_TIMELINE,
+                                progress,
                                 indeterminate = false
                             )
-                        } catch (e: Exception) {
-                            Log.e("FeedWorker", "Error storing batch of posts to ObjectBox", e)
+                        },
+                        onDiscoveryProgress = { fetchedCount, targetCount ->
+                            val progress =
+                                if (targetCount > 0) (fetchedCount * 100 / targetCount).coerceAtMost(
+                                    100
+                                ) else 0
+                            updateProgressNotification(
+                                WorkStage.FETCHING_DISCOVERY,
+                                progress,
+                                indeterminate = false
+                            )
                         }
-                        if (!isStopped && (System.currentTimeMillis() - startTimeMillis < TEN_MINUTES_MS)) {
-                            delay(WorkerCommon.THERMAL_COOLDOWN_MS)
-                        }
+                    ).also {
+                        Log.i(
+                            "FeedWorker",
+                            "getFamiliarFeeds completed. Fetched ${it.size} posts."
+                        )
                     }
                 }
 
-                if (performedEmbeddingCycle && globalIndex < familiarFeed.size - 1) {
-                    if (!isStopped && (System.currentTimeMillis() - startTimeMillis < TEN_MINUTES_MS)) {
-                        delay(MIN_INTER_EMBEDDING_DELAY_MS)
-                    }
+                val familiarFeed = familiarFeedDeferred.await()
+                if (isStopped) {
+                    Log.i("FeedWorker", "doWork: Worker stopped after familiarFeed.await().")
+                    return@coroutineScope Result.failure()
                 }
-            }
+                if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
+                    Log.i(
+                        "FeedWorker",
+                        "doWork: Worker timed out (10 min) after familiarFeed.await()."
+                    )
+                    updateProgressNotification(WorkStage.FETCHING_DISCOVERY, 100, false)
+                    updateProgressNotification(WorkStage.COMPLETE, 100)
+                    return@coroutineScope Result.success()
+                }
+                updateProgressNotification(WorkStage.FETCHING_DISCOVERY, 100, indeterminate = false)
 
-            updateProgressNotification(WorkStage.UPDATING_DATABASE, 100, indeterminate = false)
-            updateProgressNotification(WorkStage.COMPLETE, 100)
-            Log.i("FeedWorker", "doWork: Sync completed successfully.")
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("FeedWorker", "Fatal error in doWork", e)
-            if (isStopped) {
-                Log.i("FeedWorker", "doWork: Worker stopped during fatal error handling.")
-                return@coroutineScope Result.failure()
-            }
-            if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS && !isStopped) { // Check timeout only if not already stopped
-                Log.i(
-                    "FeedWorker",
-                    "doWork: Worker timed out (10 min) during fatal error handling."
-                )
+                val totalPostsToProcess = familiarFeed.size
+                Log.i("FeedWorker", "Total posts to process: $totalPostsToProcess")
                 updateProgressNotification(
-                    WorkStage.COMPLETE,
-                    100
-                ) // Mark complete on timeout during error
-                return@coroutineScope Result.success() // Or failure, depends on policy
+                    WorkStage.PROCESSING_POSTS,
+                    0,
+                    indeterminate = totalPostsToProcess == 0
+                )
+
+                val postScoreBox = objectBox.boxFor(PostScore::class.java)
+                val engagementBox = objectBox.boxFor(Engagement::class.java)
+                val interestCluster = objectBox.boxFor(InterestCluster::class.java)
+                val allInterestClusters = interestCluster.all
+                val allEngagements = engagementBox.all
+
+                postScoreBox.removeAll()
+                Log.i("FeedWorker", "Cleared existing PostScore data.")
+
+                val batchToStore = mutableListOf<PostScore>()
+
+                for ((globalIndex, feedViewPost) in familiarFeed.withIndex()) {
+                    if (isStopped) {
+                        Log.i("FeedWorker", "doWork: Worker stopped during post processing loop.")
+                        if (batchToStore.isNotEmpty()) {
+                            try {
+                                postScoreBox.put(batchToStore.sortedByDescending { it.finalScore + (Random.Default.nextFloat() * 0.1f) })
+                            } catch (e: Exception) {
+                                Log.e("FeedWorker", "Error storing final partial batch on stop", e)
+                            }
+                        }
+                        return@coroutineScope Result.failure()
+                    }
+
+                    if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS) {
+                        Log.i(
+                            "FeedWorker",
+                            "doWork: Worker timed out (10 min) during post processing."
+                        )
+                        if (batchToStore.isNotEmpty()) {
+                            try {
+                                postScoreBox.put(batchToStore.sortedByDescending { it.finalScore + (Random.Default.nextFloat() * 0.1f) })
+                            } catch (e: Exception) {
+                                Log.e(
+                                    "FeedWorker",
+                                    "Error storing final partial batch on timeout",
+                                    e
+                                )
+                            }
+                        }
+                        updateProgressNotification(WorkStage.UPDATING_DATABASE, 100, false)
+                        updateProgressNotification(WorkStage.COMPLETE, 100)
+                        Log.i("FeedWorker", "doWork: Sync ended due to timeout.")
+                        return@coroutineScope Result.success()
+                    }
+
+                    val currentPostProgress =
+                        if (totalPostsToProcess > 0) ((globalIndex + 1) * 100 / totalPostsToProcess) else 0
+                    updateProgressNotification(WorkStage.PROCESSING_POSTS, currentPostProgress)
+
+                    var performedEmbeddingCycle = false
+                    try {
+                        val postView = feedViewPost.post
+                        val post = postView.record.decodeAs<Post>()
+                        if (post.text.isNotBlank() && post.text.isNotBlank()) {
+                            performedEmbeddingCycle = true
+                            val embedding = postEmbedder.encode(post.text)
+                            val embeddedPost = EmbeddedPost(
+                                uri = postView.uri.atUri,
+                                text = post.text,
+                                embedding = embedding,
+                                authorDid = postView.author.did.did,
+                                createdAt = post.createdAt.epochSeconds,
+                                score = 0f
+                            )
+                            val score = PostRanker.scorePost(
+                                embeddedPost,
+                                MultiInterestUserProfile.fromInterestClusters(allInterestClusters),
+                                allEngagements
+                            )
+                            batchToStore.add(score)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("FeedWorker", "Error processing post ${feedViewPost.post.uri}", e)
+                    }
+
+                    if (batchToStore.size >= PROCESSING_BATCH_SIZE || globalIndex == familiarFeed.size - 1) {
+                        if (batchToStore.isNotEmpty()) {
+                            try {
+                                val sortedBatch =
+                                    batchToStore.sortedByDescending { it.finalScore + (Random.Default.nextFloat() * 0.1f) }
+                                postScoreBox.put(sortedBatch)
+                                Log.d(
+                                    "FeedWorker",
+                                    "Stored batch of ${batchToStore.size} posts to ObjectBox."
+                                )
+                                batchToStore.clear()
+                                val dbProgress =
+                                    if (totalPostsToProcess > 0) ((globalIndex + 1) * 100 / totalPostsToProcess.coerceAtLeast(
+                                        1
+                                    )) else 100
+                                updateProgressNotification(
+                                    WorkStage.UPDATING_DATABASE,
+                                    dbProgress,
+                                    indeterminate = false
+                                )
+                            } catch (e: Exception) {
+                                Log.e("FeedWorker", "Error storing batch of posts to ObjectBox", e)
+                            }
+                            if (!isStopped && (System.currentTimeMillis() - startTimeMillis < TEN_MINUTES_MS)) {
+                                delay(WorkerCommon.THERMAL_COOLDOWN_MS)
+                            }
+                        }
+                    }
+
+                    if (performedEmbeddingCycle && globalIndex < familiarFeed.size - 1) {
+                        if (!isStopped && (System.currentTimeMillis() - startTimeMillis < TEN_MINUTES_MS)) {
+                            delay(MIN_INTER_EMBEDDING_DELAY_MS)
+                        }
+                    }
+                }
+
+                updateProgressNotification(WorkStage.UPDATING_DATABASE, 100, indeterminate = false)
+                updateProgressNotification(WorkStage.COMPLETE, 100)
+                Log.i("FeedWorker", "doWork: Sync completed successfully.")
+                Result.success()
+            } catch (e: Exception) {
+                Log.e("FeedWorker", "Fatal error in doWork", e)
+                if (isStopped) {
+                    Log.i("FeedWorker", "doWork: Worker stopped during fatal error handling.")
+                    return@coroutineScope Result.failure()
+                }
+                if (System.currentTimeMillis() - startTimeMillis >= TEN_MINUTES_MS && !isStopped) { // Check timeout only if not already stopped
+                    Log.i(
+                        "FeedWorker",
+                        "doWork: Worker timed out (10 min) during fatal error handling."
+                    )
+                    updateProgressNotification(
+                        WorkStage.COMPLETE,
+                        100
+                    ) // Mark complete on timeout during error
+                    return@coroutineScope Result.success() // Or failure, depends on policy
+                }
+                Result.retry()
+            } finally {
+                if (wakeLock.isHeld) {
+                    release()
+                    Log.i("FeedWorker", "doWork: Wake lock released.")
+                }
             }
-            Result.retry()
         }
     }
 }

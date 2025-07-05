@@ -8,16 +8,13 @@ import app.bsky.feed.FeedViewPost
 import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.PostView
-import io.github.turtlepaw.mindsky.db.EmbeddedPost
-import io.github.turtlepaw.mindsky.db.EmbeddedPost_
 import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.logic.FeedTuner
+import io.github.turtlepaw.mindsky.logic.ranking.PostScore
 import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts
-import io.objectbox.Box
 import kotlinx.coroutines.launch
 import sh.christian.ozone.BlueskyApi
 import sh.christian.ozone.api.AtUri
-import kotlin.random.Random
 
 class FeedViewModel(
     private val api: BlueskyApi
@@ -30,7 +27,7 @@ class FeedViewModel(
     var isFetchingMoreFollowing = mutableStateOf(false)
         private set
 
-    var forYouFeed = mutableStateOf<List<Pair<EmbeddedPost, PostView>>?>(null)
+    var forYouFeed = mutableStateOf<List<Pair<PostScore, PostView>>?>(null)
         private set
 
     var error = mutableStateOf<String?>(null)
@@ -45,7 +42,7 @@ class FeedViewModel(
 
     suspend fun getPost(uri: String): PostView {
         val followingMatch = followingFeed.value?.find { it.post.uri.atUri == uri }
-        val forYouMatch = forYouFeed.value?.find { it.first.uri == uri }
+        val forYouMatch = forYouFeed.value?.find { it.first.postUri == uri }
         return if (followingMatch != null) {
             followingMatch.post
         } else if (forYouMatch != null) {
@@ -93,8 +90,7 @@ class FeedViewModel(
                 ) // 'false' because it's initial/refresh
 
                 Log.d("FeedVM", "Fetching For You feed.")
-                fetchForYouPostsInternal(limit = limit)
-
+                fetchForYouPostsInternal()
             } catch (e: Exception) {
                 Log.e("FeedVM", "Error fetching feeds (Exception)", e)
                 error.value = "Failed to fetch feeds: ${e.message}"
@@ -166,9 +162,10 @@ class FeedViewModel(
         }
     }
 
-    private suspend fun fetchForYouPostsInternal(limit: Long = 100) {
-        val box = ObjectBox.store.boxFor(EmbeddedPost::class.java)
-        if (box.all.isEmpty()) { // Check if ObjectBox has any posts at all
+    private suspend fun fetchForYouPostsInternal() {
+        val box = ObjectBox.store.boxFor(PostScore::class.java)
+        val posts = box.all
+        if (posts.isEmpty()) { // Check if ObjectBox has any posts at all
             Log.d(
                 "FeedVM",
                 "No posts found in ObjectBox for ForYou feed, fetching from API not possible with this logic."
@@ -177,32 +174,8 @@ class FeedViewModel(
             return
         }
 
-        // Get locally scored posts, take up to the specified limit
-        val postsFromDb = getPostsSortedByScore(box).take(limit.toInt())
-
-        if (postsFromDb.isEmpty()) {
-            Log.d(
-                "FeedVM",
-                "No posts from DB to fetch details for ForYou feed after applying limit."
-            )
-            forYouFeed.value = emptyList()
-            return
-        }
-
         forYouFeed.value = api.fetchChunkedPosts(
-            postsFromDb.map { Pair(it, it.uri) }
+            posts.map { Pair(it, it.postUri) }
         )
-    }
-
-    // This is a helper, remains unchanged
-    fun getPostsSortedByScore(box: Box<EmbeddedPost>): List<EmbeddedPost> {
-        return box.query()
-            .notNull(EmbeddedPost_.score) // Ensure score is not null for sorting
-            .build()
-            .find()
-            // Add a small random jitter to score for variety if scores are identical
-            .map { it to (it.score!! + Random.Default.nextFloat() * 0.1f) }
-            .sortedByDescending { it.second }
-            .map { it.first }
     }
 }

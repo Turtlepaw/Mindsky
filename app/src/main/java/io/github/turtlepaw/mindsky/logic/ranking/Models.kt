@@ -11,7 +11,7 @@ data class PostScore(
     @Id var id: Long = 0,
     val postId: Long,
     // Store post separately or use a relation
-    val postUri: String? = null, // Instead of embedding the whole post
+    val postUri: String, // Instead of embedding the whole post
     val finalScore: Double,
     // Flatten the breakdown
     val semanticSimilarity: Double = 0.0,

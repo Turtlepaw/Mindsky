@@ -82,7 +82,7 @@ fun PostStructure(
                         ) {
                             headline()
                             content()
-                            if (density != PostDensity.Expanded) PostAction.Section(
+                            PostAction.Section(
                                 actions,
                                 discoveryContext
                             )
@@ -97,7 +97,10 @@ fun PostStructure(
                     )
 
                     content()
-                    PostAction.Section(actions, discoveryContext)
+                    if (density != PostDensity.Expanded) PostAction.Section(
+                        actions,
+                        discoveryContext
+                    )
                 }
             }
             if (density == PostDensity.Expanded) {

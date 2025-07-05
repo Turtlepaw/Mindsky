@@ -124,10 +124,10 @@ fun FeedWorkerProgressDisplay(feedWorkerInfo: WorkInfo?) {
 
         val displayStageName = try {
             FeedWorker.WorkStage.valueOf(stageNameString).displayName
-        } catch (e: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             try {
                 SignalProcessingWorker.Stage.valueOf(stageNameString).displayName
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 stageNameString // Fallback if stage name is somehow not in enum
             }
         }
@@ -292,9 +292,7 @@ fun Feed(nav: DestinationsNavigator) {
                             FeedWorkerProgressDisplay(feedWorkerInfo = feedWorkerInfo)
                         }
                     }
-                    item { // PrimaryTabRow is now an item in LazyColumn
-                        val tabTitles =
-                            remember { FeedDestination.entries.map { it.title ?: it.name } }
+                    item {
                         PrimaryTabRow(
                             selectedTabIndex = selectedDestination,
                         ) {
@@ -349,7 +347,7 @@ fun Feed(nav: DestinationsNavigator) {
                             items(forYouFeedData) {
                                 PostComponent(it.second, nav, discoveryContext = { modifier ->
                                     PostInsightsContext(
-                                        it.first.score ?: 0f,
+                                        it.first.finalScore ?: 0.0,
                                         InsightType.Score,
                                         modifier
                                     )

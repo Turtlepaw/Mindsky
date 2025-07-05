@@ -47,13 +47,14 @@ import io.github.turtlepaw.mindsky.viewmodels.FeedViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModelFactory
 import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueuePeriodicFeedWorkers
+import me.zhanghai.compose.preference.ProvidePreferenceLocals
 
 object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
     private val fastOutExtraSlowIn = CubicBezierEasing(0.05f, 0f, 0.133333f, 1f)
     private val slideDistancePx = 96
 
-    private val enterDuration = 340
-    private val exitDuration = 190
+    private val enterDuration = 230
+    private val exitDuration = 155
 
     override val enterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
         fadeIn(
@@ -145,16 +146,18 @@ class MainActivity : ComponentActivity() {
                 LocalFeedModel provides feedViewModel
             ) {
                 MindskyTheme {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        DestinationsNavHost(
-                            navGraph = NavGraphs.root,
-                            start = startRoute,
-                            defaultTransitions = DefaultSlideFadeTransitions
-                        )
+                    ProvidePreferenceLocals {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        ) {
+                            DestinationsNavHost(
+                                navGraph = NavGraphs.root,
+                                start = startRoute,
+                                defaultTransitions = DefaultSlideFadeTransitions
+                            )
+                        }
                     }
                 }
             }

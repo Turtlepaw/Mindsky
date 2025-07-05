@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.core)
     ksp(libs.ksp)
     implementation(libs.bottom.sheet)
+
     implementation(libs.sentence.embeddings)
     implementation(libs.model2vec)
 
@@ -95,5 +96,5 @@ dependencies {
 
     implementation(libs.library)
 
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
+    implementation(libs.kotlinx.serialization.json)
 }

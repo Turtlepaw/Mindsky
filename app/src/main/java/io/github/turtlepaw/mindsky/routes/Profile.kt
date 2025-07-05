@@ -102,7 +102,7 @@ fun Profile(navigator: DestinationsNavigator) {
                             modifier = Modifier
                                 .padding(16.dp)
                                 .fillMaxWidth(),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(
                                 15.dp,
                                 Alignment.CenterHorizontally
@@ -166,7 +166,7 @@ fun Profile(navigator: DestinationsNavigator) {
                         reason = null,
                         discoveryContext = { modifier ->
                             PostInsightsContext(
-                                it.first?.embedding?.first() ?: 0f,
+                                it.first?.embedding?.first()?.toDouble() ?: 0.0,
                                 InsightType.Vector,
                                 modifier
                             )

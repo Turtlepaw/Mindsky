@@ -33,7 +33,7 @@ import com.ramcosta.composedestinations.generated.destinations.LoginDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.components.Avatar
-import io.github.turtlepaw.mindsky.routes.TopAppBarCommon
+import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
 
 data class Pds(
     val icon: String?,

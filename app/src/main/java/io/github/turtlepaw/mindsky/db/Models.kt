@@ -1,7 +1,9 @@
 package io.github.turtlepaw.mindsky.db
 
 import io.github.turtlepaw.mindsky.EngagementTypeConverter
-import io.objectbox.annotation.*
+import io.objectbox.annotation.Convert
+import io.objectbox.annotation.Entity
+import io.objectbox.annotation.Id
 
 @Entity
 data class EmbeddedPost(
@@ -45,6 +47,12 @@ data class Engagement(
     @Convert(converter = EngagementTypeConverter::class, dbType = Int::class)
     var type: EngagementType,
     var dwellTimeMs: Long = 0,
+)
+
+@Entity
+data class FeedInterest(
+    @Id var id: Long = 0,
+    var hashtag: String,
 )
 
 enum class EngagementType {

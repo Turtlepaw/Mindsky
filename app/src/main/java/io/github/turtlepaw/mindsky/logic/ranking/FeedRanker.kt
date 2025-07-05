@@ -33,7 +33,8 @@ object PostRanker {
         return PostScore(
             postId = post.id,
             finalScore = finalScore,
-            matchedInterest = matchedInterest
+            matchedInterest = matchedInterest,
+            postUri = post.uri
         ).withBreakdown(
             ScoreBreakdown(
                 similarity,

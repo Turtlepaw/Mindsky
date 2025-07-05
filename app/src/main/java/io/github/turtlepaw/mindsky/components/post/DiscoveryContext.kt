@@ -19,7 +19,7 @@ enum class InsightType {
 
 @Composable
 fun PostInsightsContext(
-    value: Float,
+    value: Double,
     type: InsightType,
     modifier: Modifier = Modifier,
 ) {

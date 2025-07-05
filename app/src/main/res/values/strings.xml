@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">Mindsky</string>
-    <string name="settings_name">Settings</string>
 
     <!--  Sign in  -->
     <string name="sign_in_with_provider">Select a provider to sign into</string>
@@ -14,4 +13,12 @@
     <!--  General  -->
     <string name="blocked">Blocked</string>
     <string name="post">Post</string>
+
+    <!--  Settings  -->
+    <string name="settings_title">Settings</string>
+    <string name="interest_clusters">Interest Clusters</string>
+    <string name="interest_clusters_description">View your interests that are used to build your feed</string>
+    <string name="interest_sources">Interest Sources</string>
+    <string name="interest_sources_description">Select the sources you want to see in your feed</string>
+    <string name="following_feed_mix">Mix following feed</string>
 </resources>

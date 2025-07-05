@@ -23,7 +23,7 @@ import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostDensity
 import io.github.turtlepaw.mindsky.di.LocalFeedModel
-import io.github.turtlepaw.mindsky.routes.TopAppBarCommon
+import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
 import kotlinx.coroutines.launch
 
 @Destination<RootGraph>

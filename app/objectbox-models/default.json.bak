@@ -183,9 +183,63 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "8:6332272935565731317",
+      "lastPropertyId": "9:4994565089539159477",
+      "name": "PostScore",
+      "properties": [
+        {
+          "id": "1:7912328768166513762",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7964492910025192923",
+          "name": "postId",
+          "type": 6
+        },
+        {
+          "id": "3:8764190226110894985",
+          "name": "postUri",
+          "type": 9
+        },
+        {
+          "id": "4:4969498275063838680",
+          "name": "finalScore",
+          "type": 8
+        },
+        {
+          "id": "5:797681826611184126",
+          "name": "semanticSimilarity",
+          "type": 8
+        },
+        {
+          "id": "6:6033465973882215680",
+          "name": "engagement",
+          "type": 8
+        },
+        {
+          "id": "7:1606227942142809677",
+          "name": "recency",
+          "type": 8
+        },
+        {
+          "id": "8:8473567539376194520",
+          "name": "diversity",
+          "type": 8
+        },
+        {
+          "id": "9:4994565089539159477",
+          "name": "matchedInterest",
+          "type": 9
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "7:179388668360567684",
+  "lastEntityId": "8:6332272935565731317",
   "lastIndexId": "0:0",
   "lastRelationId": "1:3387754069174167418",
   "lastSequenceId": "0:0",

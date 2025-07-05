@@ -29,7 +29,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
-import io.github.turtlepaw.mindsky.routes.TopAppBarCommon
+import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.defaultRequest
@@ -91,6 +91,7 @@ fun CustomPds(navigator: DestinationsNavigator) {
                 isConnected = ConnectionState.Connected
             } catch (e: Exception) {
                 isConnected = ConnectionState.Failed
+                Log.e("CustomPds", "Failed to connect to PDS: ${e.message}", e)
             }
         }
     }
