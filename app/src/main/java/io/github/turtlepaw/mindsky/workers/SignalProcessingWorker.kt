@@ -27,7 +27,6 @@ import io.github.turtlepaw.mindsky.db.EngagementType
 import io.github.turtlepaw.mindsky.logic.PostEmbedder
 import io.github.turtlepaw.mindsky.logic.ranking.InterestCluster
 import io.github.turtlepaw.mindsky.logic.ranking.InterestClusterer
-import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateWorkers
 import io.github.turtlepaw.mindsky.workers.WorkerManager.getFeedWorkerRequest
 import io.objectbox.Box
 import kotlinx.coroutines.Dispatchers
@@ -203,10 +202,8 @@ class SignalProcessingWorker(
                 )
 
                 processedEngagements.add(newVector)
-
-                if (likeView.post.uri.atUri !in knownUris) {
-                    likesToEmbedAndStore.add(newVector)
-                }
+                box.put(newVector)
+                knownUris.add(newVector.uri)
 
                 onProgress((i * 100) / postsToProcess.coerceAtLeast(1))
 
@@ -216,17 +213,6 @@ class SignalProcessingWorker(
 
             } catch (e: Exception) {
                 Log.e(logTag, "Error processing like for embedding: ${likeView.post.uri}", e)
-            }
-        }
-
-        // Store batch if we have time
-        if (likesToEmbedAndStore.isNotEmpty() && !isTimeRunningOut()) {
-            try {
-                box.put(likesToEmbedAndStore)
-                knownUris.addAll(likesToEmbedAndStore.map { it.uri })
-                Log.d(logTag, "Stored batch of ${likesToEmbedAndStore.size} new likes.")
-            } catch (dbE: Exception) {
-                Log.e(logTag, "Error storing batch of new likes", dbE)
             }
         }
 
@@ -316,15 +302,18 @@ class SignalProcessingWorker(
             WorkQuery.fromTags(this::class.java.simpleName)
         ).get()
 
-        val otherRunningWorkers = existingWork.filter { workInfo ->
-            workInfo.state == WorkInfo.State.RUNNING && workInfo.id != this.id
-        }
+        val runningWorkers = existingWork.filter { it.state == WorkInfo.State.RUNNING }
 
-        Log.d(
-            logTag,
-            "Found ${otherRunningWorkers.size} other running ${this::class.java.simpleName} workers"
-        )
-        return otherRunningWorkers.isNotEmpty()
+        if (runningWorkers.isEmpty()) return false
+
+        // Sort by UUID to get deterministic ordering
+        val sortedWorkers = runningWorkers.sortedBy { it.id.toString() }
+        val highestPriorityWorker = sortedWorkers.first()
+
+        Log.d(logTag, "Highest priority worker: ${highestPriorityWorker.id}, current: ${this.id}")
+
+        // Only continue if this worker has the highest priority
+        return highestPriorityWorker.id != this.id
     }
 
     override suspend fun doWork(): Result {
@@ -385,10 +374,6 @@ class SignalProcessingWorker(
 
                 if (checkIfWorkerAlreadyRunning()) {
                     Log.i(logTag, "Another embedding worker is running, skipping...")
-                    WorkManager.getInstance(appContext).apply {
-                        enqueueImmediateWorkers()
-                        cancelAllWorkByTag(this::class.java.simpleName)
-                    }
                     return Result.success()
                 }
 
@@ -405,29 +390,36 @@ class SignalProcessingWorker(
                     onProgress = getProgressCallback(Stage.PROCESSING_LIKES)
                 )
 
+                val allLikes = allLikesFromDb + allProcessedLikes
+
                 // Only do clustering if we have time and processed likes
-                if (!isTimeRunningOut() && allProcessedLikes.isNotEmpty()) {
+                if (allLikes.isNotEmpty()) {
                     Log.d(logTag, "Creating interest clusters...")
                     val clusterer = InterestClusterer()
-                    val userProfile = clusterer.createClusters(allProcessedLikes)
+                    val userProfile = clusterer.createClusters(allLikes)
 
                     // Store clusters
-                    objectBoxStore.boxFor(InterestCluster::class.java).apply {
-                        removeAll()
-                        put(userProfile.first)
-                    }
-                    Log.d(logTag, "Interest clusters created and stored")
+                    objectBoxStore.boxFor(InterestCluster::class.java)
+                        .apply {
+                            removeAll()
+                            put(userProfile.first)
+                        }
+
+                    Log.d(
+                        logTag,
+                        "Interest clusters created and stored (${userProfile.first.size} clusters / ${userProfile.second})."
+                    )
                 } else {
                     Log.w(
                         logTag,
-                        "Skipping clustering due to time constraints or no processed likes"
+                        "Skipping clustering due to no processed likes"
                     )
                 }
 
                 // Final time check before enqueueing next worker
                 val shouldEnqueueFeedWorker = inputData.getBoolean(SHOULD_ENQUEUE_FEED_WORKER, true)
 
-                if (shouldEnqueueFeedWorker && !isTimeRunningOut()) {
+                if (shouldEnqueueFeedWorker) {
                     WorkManager.getInstance(applicationContext).apply {
                         val request = getFeedWorkerRequest(8)
                         enqueueUniqueWork(

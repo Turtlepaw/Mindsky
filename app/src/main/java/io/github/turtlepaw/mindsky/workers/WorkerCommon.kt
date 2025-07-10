@@ -44,7 +44,7 @@ object WorkerCommon {
                             Log.v("Ktor_Default", message)
                         }
                     }
-                    level = LogLevel.HEADERS
+                    level = LogLevel.INFO
                 }
                 install(BlueskyAuthPlugin) {
                     // observe session changes

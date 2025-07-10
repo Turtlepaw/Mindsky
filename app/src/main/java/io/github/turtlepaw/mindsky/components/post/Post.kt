@@ -2,7 +2,6 @@ package io.github.turtlepaw.mindsky.components.post
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -21,14 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
@@ -50,11 +47,14 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import app.bsky.embed.RecordViewRecordUnion
 import app.bsky.feed.FeedViewPost
 import app.bsky.feed.FeedViewPostReasonUnion
@@ -72,7 +72,6 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.components.Avatar
-import io.github.turtlepaw.mindsky.components.PostHeadline
 import io.github.turtlepaw.mindsky.components.post.embeds.FeedGraphDisplay
 import io.github.turtlepaw.mindsky.components.post.embeds.InformationalEmbed
 import io.github.turtlepaw.mindsky.components.post.embeds.QuotePost
@@ -132,7 +131,7 @@ fun PostComponent(
                 Row(
                     horizontalArrangement = spacedBy(8.dp),
                     modifier = Modifier
-                        .offset((25).dp)
+                        .padding(start = 25.dp)
                         .padding(bottom = 8.dp)
                 ) {
                     Icon(
@@ -279,53 +278,83 @@ fun PostComponent(
                 facet.features.forEach { feature ->
                     when (feature) {
                         is FacetFeatureUnion.Link -> {
-                            addStyle(
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    textDecoration = TextDecoration.Underline
-                                ).toSpanStyle(),
-                                start = charStart,
-                                end = charEnd
-                            )
-                            addStringAnnotation(
-                                tag = "URL",
-                                annotation = feature.value.uri.uri,
-                                start = charStart,
-                                end = charEnd
-                            )
+                            withLink(LinkAnnotation.Url(feature.value.uri.uri)) {
+                                addStyle(
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textDecoration = TextDecoration.Underline
+                                    ).toSpanStyle(),
+                                    start = charStart,
+                                    end = charEnd
+                                )
+                            }
                         }
 
                         is FacetFeatureUnion.Mention -> {
-                            addStyle(
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary, // Or another distinct color
-                                    fontWeight = FontWeight.Bold
-                                ).toSpanStyle(),
-                                start = charStart,
-                                end = charEnd
-                            )
-                            addStringAnnotation(
-                                tag = "MENTION",
-                                annotation = feature.value.did.did,
-                                start = charStart,
-                                end = charEnd
-                            )
+                            withLink(LinkAnnotation.Clickable("Mention", linkInteractionListener = {
+                                val did = feature.value.did.did
+                                try {
+                                    val profileUrl = "https://bsky.app/profile/${did}"
+                                    val intent = Intent(Intent.ACTION_VIEW, profileUrl.toUri())
+                                    context.startActivity(intent)
+                                } catch (e: ActivityNotFoundException) {
+                                    Log.e(
+                                        "PostComponent",
+                                        "No app found to handle Bluesky profile URL for DID: $did",
+                                        e
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e(
+                                        "PostComponent",
+                                        "Error opening Bluesky profile for DID: $did",
+                                        e
+                                    )
+                                }
+                            })) {
+                                addStyle(
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        color = MaterialTheme.colorScheme.primary, // Or another distinct color
+                                        fontWeight = FontWeight.Bold
+                                    ).toSpanStyle(),
+                                    start = charStart,
+                                    end = charEnd
+                                )
+                            }
                         }
 
                         is FacetFeatureUnion.Tag -> {
-                            addStyle(
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    color = MaterialTheme.colorScheme.primary, // Or another distinct color
-                                ).toSpanStyle(),
-                                start = charStart,
-                                end = charEnd
-                            )
-                            addStringAnnotation(
-                                tag = "TAG",
-                                annotation = feature.value.tag,
-                                start = charStart,
-                                end = charEnd
-                            )
+                            withLink(LinkAnnotation.Clickable("Mention", linkInteractionListener = {
+                                val tag = feature.value.tag
+                                try {
+                                    val queryTag =
+                                        if (tag.startsWith("#")) tag.substring(1) else tag
+                                    val encodedTag =
+                                        URLEncoder.encode(queryTag, StandardCharsets.UTF_8.name())
+                                    val searchUrl = "https://bsky.app/search?q=%23$encodedTag"
+                                    val intent = Intent(Intent.ACTION_VIEW, searchUrl.toUri())
+                                    context.startActivity(intent)
+                                } catch (e: ActivityNotFoundException) {
+                                    Log.e(
+                                        "PostComponent",
+                                        "No app found to handle Bluesky tag URL for tag: $tag",
+                                        e
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e(
+                                        "PostComponent",
+                                        "Error opening Bluesky profile for tag: $tag",
+                                        e
+                                    )
+                                }
+                            })) {
+                                addStyle(
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        color = MaterialTheme.colorScheme.primary, // Or another distinct color
+                                    ).toSpanStyle(),
+                                    start = charStart,
+                                    end = charEnd
+                                )
+                            }
                         }
 
                         else -> {
@@ -336,70 +365,9 @@ fun PostComponent(
             }
         }
 
-        ClickableText(
+        Text(
             text = annotatedText,
             style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-            onClick = { offset ->
-                val localContext = context // Use the existing context
-
-                annotatedText.getStringAnnotations(tag = "URL", start = offset, end = offset)
-                    .firstOrNull()?.let { annotation ->
-                        Log.d("PostComponent", "Clicked URL: ${annotation.item}")
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
-                            localContext.startActivity(intent)
-                        } catch (e: ActivityNotFoundException) {
-                            Log.e(
-                                "PostComponent",
-                                "No app found to handle URL: ${annotation.item}",
-                                e
-                            )
-                        } catch (e: Exception) {
-                            Log.e("PostComponent", "Error opening URL: ${annotation.item}", e)
-                        }
-                    }
-
-                annotatedText.getStringAnnotations(tag = "MENTION", start = offset, end = offset)
-                    .firstOrNull()?.let { annotation ->
-                        val did = annotation.item
-                        Log.d("PostComponent", "Clicked Mention: $did")
-                        try {
-                            val profileUrl = "https://bsky.app/profile/$did"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(profileUrl))
-                            localContext.startActivity(intent)
-                        } catch (e: ActivityNotFoundException) {
-                            Log.e(
-                                "PostComponent",
-                                "No app found to handle Bluesky profile URL for DID: $did",
-                                e
-                            )
-                        } catch (e: Exception) {
-                            Log.e("PostComponent", "Error opening Bluesky profile for DID: $did", e)
-                        }
-                    }
-
-                annotatedText.getStringAnnotations(tag = "TAG", start = offset, end = offset)
-                    .firstOrNull()?.let { annotation ->
-                        val tag = annotation.item
-                        Log.d("PostComponent", "Clicked Tag: $tag")
-                        try {
-                            val queryTag = if (tag.startsWith("#")) tag.substring(1) else tag
-                            val encodedTag =
-                                URLEncoder.encode(queryTag, StandardCharsets.UTF_8.name())
-                            val searchUrl = "https://bsky.app/search?q=%23$encodedTag"
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(searchUrl))
-                            localContext.startActivity(intent)
-                        } catch (e: ActivityNotFoundException) {
-                            Log.e(
-                                "PostComponent",
-                                "No app found to handle Bluesky tag search for: $tag",
-                                e
-                            )
-                        } catch (e: Exception) {
-                            Log.e("PostComponent", "Error opening Bluesky tag search for: $tag", e)
-                        }
-                    }
-            }
         )
 
         when (postView.embed) {
@@ -448,6 +416,7 @@ fun PostComponent(
                     }
                 }
             }
+
             is PostViewEmbedUnion.RecordView -> {
                 val recordEmbed = (postView.embed as PostViewEmbedUnion.RecordView).value
                 val record = recordEmbed.record
@@ -488,6 +457,7 @@ fun PostComponent(
                     else -> {}
                 }
             }
+
             // This is an assumed structure for video embeds.
             // Replace with the actual structure if different.
             is PostViewEmbedUnion.ExternalView -> {
@@ -496,6 +466,7 @@ fun PostComponent(
                 // You might need to adjust this based on the actual data structure
                 VideoEmbed(videoUrl = externalEmbed.external.uri.uri)
             }
+
             else -> {}
         }
     }

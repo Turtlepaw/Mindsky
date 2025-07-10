@@ -7,9 +7,9 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.directory
 import coil3.request.crossfade
-import com.ramcosta.composedestinations.annotation.Destination
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.auth.UserSession
+import io.github.turtlepaw.mindsky.cache.LabelManager
 import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -18,24 +18,22 @@ import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
-import io.ktor.client.plugins.logging.Logger as KtorLogger
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.takeFrom
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-// Using Dispatchers.Main for applicationScope, but ensure long-running init isn't on main thread
-// For most of this, it's fine.
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import sh.christian.ozone.BlueskyApi
-import sh.christian.ozone.XrpcBlueskyApi
+import kotlinx.coroutines.runBlocking
 import sh.christian.ozone.api.AuthenticatedXrpcBlueskyApi
 import sh.christian.ozone.api.BlueskyAuthPlugin
+import io.ktor.client.plugins.logging.Logger as KtorLogger
 
 class MindskyApplication : Application(), SingletonImageLoader.Factory {
-
     private lateinit var sessionManager: SessionManager
+    lateinit var labelManager: LabelManager
+        private set
 
     val authTokensFlow = MutableStateFlow<BlueskyAuthPlugin.Tokens?>(null)
     lateinit var blueskyApi: AuthenticatedXrpcBlueskyApi
@@ -58,48 +56,43 @@ class MindskyApplication : Application(), SingletonImageLoader.Factory {
         Log.d("MindskyApplication", "onCreate")
         ObjectBox.init(this) // Your ObjectBox initialization
         sessionManager = SessionManager(this)
+        labelManager = LabelManager(this)
 
         val currentSession = sessionManager.getSession()
-        if (currentSession != null) {
-            Log.d(
-                "MindskyApplication",
-                "Active session found for ${currentSession.handle}. Configuring API."
-            )
+        runBlocking(Dispatchers.IO) {
             configureAuthenticatedApi(currentSession)
-        } else {
-            Log.d("MindskyApplication", "No active session. User needs to login.")
-            configureAuthenticatedApi()
         }
     }
 
-    fun configureAuthenticatedApi(session: UserSession? = null) {
+    suspend fun configureAuthenticatedApi(session: UserSession? = null) {
         Log.i(
             "MindskyApplication",
             "Configuring authenticated API for host: ${session?.host}, user: ${session?.handle}"
         )
 
-        val httpClient = HttpClient(OkHttp) {
-            // OkHttp specific configurations can go in an engine { ... } block if needed
+        val pdsUrl = session?.host ?: "https://bsky.social"
 
+        // Now, create the main client with the correct labelers
+        val httpClient = HttpClient(OkHttp) {
             install(Logging) {
                 logger = object : KtorLogger {
                     override fun log(message: String) {
                         Log.v("Ktor_Authenticated", message)
                     }
                 }
-                level =
-                    LogLevel.BODY // Log BODY for auth debugging, consider HEADERS for production
+                level = LogLevel.BODY
             }
 
-            defaultRequest { // Set the base URL for all requests made by this client
-                url.takeFrom(session?.host ?: "https://bsky.social")
+            defaultRequest {
+                url.takeFrom(pdsUrl)
+                val cachedLabelers = labelManager.labelersFlow.value.joinToString(",")
+                headers.append("atproto-accept-labelers", cachedLabelers)
             }
 
             HttpResponseValidator {
                 handleResponseExceptionWithRequest { exception, request ->
                     val clientException = exception as? ClientRequestException
                         ?: return@handleResponseExceptionWithRequest
-                    // Check if the failed request was to the refresh session endpoint
                     if (clientException.response.status == HttpStatusCode.BadRequest &&
                         request.url.encodedPath.endsWith("com.atproto.server.refreshSession")
                     ) {
@@ -130,7 +123,13 @@ class MindskyApplication : Application(), SingletonImageLoader.Factory {
         )
 
         CoroutineScope(Dispatchers.IO).launch {
-            blueskyApi?.authTokens?.collect { tokens ->
+            labelManager.preWarmDefinitions(blueskyApi)
+            labelManager.revalidateLabelers(blueskyApi)
+
+        }
+
+        CoroutineScope(Dispatchers.IO).launch {
+            blueskyApi.authTokens.collect { tokens ->
                 if (tokens != null && session != null) {
                     sessionManager.saveSession(
                         UserSession(
@@ -150,7 +149,6 @@ class MindskyApplication : Application(), SingletonImageLoader.Factory {
                 }
             }
         }
-        // Initialize the flow with the current session's tokens
         authTokensFlow.value = session?.toTokens()
         Log.i("MindskyApplication", "Authenticated API client configured for ${session?.handle}.")
     }

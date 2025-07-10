@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import app.bsky.actor.ProfileViewDetailed
+import com.atproto.label.LabelValueDefinition
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.auth.UserSession
 import io.github.turtlepaw.mindsky.repositories.ProfileRepository
@@ -52,6 +53,9 @@ class ProfileViewModel(
             _uiState.value = ProfileUiState.Error("Failed to load profile: ${e.message}")
         }
     }
+
+    private val _resolvedLabels = MutableStateFlow<List<LabelValueDefinition>>(emptyList())
+    val resolvedLabels = _resolvedLabels.asStateFlow()
 }
 
 class ProfileViewModelFactory(

@@ -16,9 +16,12 @@
 
     <!--  Settings  -->
     <string name="settings_title">Settings</string>
-    <string name="interest_clusters">Interest Clusters</string>
-    <string name="interest_clusters_description">View your interests that are used to build your feed</string>
     <string name="interest_sources">Interest Sources</string>
     <string name="interest_sources_description">Select the sources you want to see in your feed</string>
     <string name="following_feed_mix">Mix following feed</string>
+
+    <!--  Interest clusters  -->
+    <string name="interest_clusters">Interest Clusters</string>
+    <string name="interest_clusters_description">View your interests that are used to build your feed</string>
+    <string name="interest_clusters_empty">No interest clusters found</string>
 </resources>

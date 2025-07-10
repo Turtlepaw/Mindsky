@@ -1,5 +1,6 @@
 package io.github.turtlepaw.mindsky.routes
 
+import android.util.Log
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,8 +59,10 @@ fun Profile(navigator: DestinationsNavigator) {
 
     LaunchedEffect(Unit) {
         val box = ObjectBox.store.boxFor(Engagement::class.java)
+        val all = box.all
+        Log.d("Profile", "Found ${all.size} likes")
         likes = api.fetchChunkedPosts(
-            box.all.map { it to it.uri }
+            all.map { it to it.uri }
         )
     }
 
