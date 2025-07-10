@@ -77,6 +77,7 @@ import io.github.turtlepaw.mindsky.components.post.embeds.FeedGraphDisplay
 import io.github.turtlepaw.mindsky.components.post.embeds.InformationalEmbed
 import io.github.turtlepaw.mindsky.components.post.embeds.QuotePost
 import io.github.turtlepaw.mindsky.components.post.embeds.StarterPack
+import io.github.turtlepaw.mindsky.components.post.embeds.VideoEmbed
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -486,6 +487,14 @@ fun PostComponent(
 
                     else -> {}
                 }
+            }
+            // This is an assumed structure for video embeds.
+            // Replace with the actual structure if different.
+            is PostViewEmbedUnion.ExternalView -> {
+                val externalEmbed = (postView.embed as PostViewEmbedUnion.ExternalView).value
+                // Assuming the video URL is in externalEmbed.external.uri
+                // You might need to adjust this based on the actual data structure
+                VideoEmbed(videoUrl = externalEmbed.external.uri.uri)
             }
             else -> {}
         }

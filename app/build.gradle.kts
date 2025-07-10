@@ -97,4 +97,9 @@ dependencies {
     implementation(libs.library)
 
     implementation(libs.kotlinx.serialization.json)
+
+    implementation("io.sanghun:compose-video:1.2.0")
+    implementation("androidx.media3:media3-exoplayer:1.1.0") // [Required] androidx.media3 ExoPlayer dependency
+    implementation("androidx.media3:media3-session:1.1.0") // [Required] MediaSession Extension dependency
+    implementation("androidx.media3:media3-ui:1.1.0") // [Required] Base Player UI
 }
