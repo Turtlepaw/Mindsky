@@ -2,11 +2,13 @@ package io.github.turtlepaw.mindsky.routes.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -16,9 +18,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.InterestClustersDestination
@@ -26,12 +30,14 @@ import com.ramcosta.composedestinations.generated.destinations.InterestSourcesDe
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.utils.StringComposable
+import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueueImmediateWorkers
 import me.zhanghai.compose.preference.preference
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
 fun Settings(navigator: DestinationsNavigator) {
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBarCommon.withBack(navigator, R.string.settings_title)
@@ -83,15 +89,18 @@ fun Settings(navigator: DestinationsNavigator) {
                     )
                 }
             )
-//                item {
-//                    Button(
-//                        onClick = {
-//                            WorkManager.getInstance(context).enqueueImmediateWorkers()
-//                        }
-//                    ) {
-//                        Text("Launch embedding")
-//                    }
-//                }
+            item {
+                Button(
+                    onClick = {
+                        WorkManager.getInstance(context).enqueueImmediateWorkers()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text("Launch embedding")
+                }
+            }
         }
     }
 }
@@ -107,6 +116,23 @@ object TopAppBarCommon {
                     style = titleStyle ?: MaterialTheme.typography.titleLarge
                 )
             },
+            navigationIcon = {
+                IconButton(onClick = { navigator.navigateUp() }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+    }
+
+    @Composable
+    @OptIn(ExperimentalMaterial3Api::class)
+    fun withBack(navigator: DestinationsNavigator) {
+        TopAppBar(
+            title = {},
             navigationIcon = {
                 IconButton(onClick = { navigator.navigateUp() }) {
                     Icon(

@@ -2,108 +2,155 @@ package io.github.turtlepaw.mindsky.logic.ranking
 
 import io.github.turtlepaw.mindsky.db.Engagement
 import kotlin.math.sqrt
+import kotlin.random.Random
 
 class InterestClusterer {
-    private val SIMILARITY_THRESHOLD = 0.7 // How similar posts need to be to group together
-    private val MAX_CLUSTERS = 4 // cats, tech, humor, news, etc.
-    private val MIN_CLUSTER_SIZE = 2 // Need at least 2 posts to form a cluster
+    private val SIMILARITY_THRESHOLD = 0.6 // Lowered for better clustering
+    private val MAX_CLUSTERS = 6 // Increased for more diversity
+    private val MIN_CLUSTER_SIZE = 3 // More meaningful clusters
+    private val MAX_ITERATIONS = 10 // Prevent infinite loops
+    private val CONVERGENCE_THRESHOLD = 0.001 // When to stop refining
 
     fun createClusters(likedPosts: List<Engagement>): Pair<List<InterestCluster>, FloatArray> {
-        if (likedPosts.size < 3) {
-            // Not enough data for clustering, use simple average
+        if (likedPosts.size < MIN_CLUSTER_SIZE) {
             val avgEmbedding = averageEmbeddings(likedPosts.map { it.embedding })
             return emptyList<InterestCluster>() to avgEmbedding
         }
 
-        val clusters = findClusters(likedPosts)
+        // Use K-means++ initialization for better clustering
+        val clusters = kMeansCluster(likedPosts)
         val namedClusters = assignClusterNames(clusters, likedPosts)
         val fallback = averageEmbeddings(likedPosts.map { it.embedding })
 
         return namedClusters to fallback
     }
 
-    private fun findClusters(likedPosts: List<Engagement>): List<InterestCluster> {
-        val clusters = mutableListOf<InterestCluster>()
+    private fun kMeansCluster(likedPosts: List<Engagement>): List<InterestCluster> {
+        val k = minOf(MAX_CLUSTERS, likedPosts.size / MIN_CLUSTER_SIZE)
+        if (k < 2) {
+            // Not enough posts for meaningful clustering
+            return listOf(
+                InterestCluster(
+                    centerEmbedding = averageEmbeddings(likedPosts.map { it.embedding }),
+                    postIds = likedPosts.map { it.id.toString() }.toJson(),
+                    name = "General Interest",
+                )
+            )
+        }
 
-        // Start with the first post as our first cluster
-        clusters.add(InterestCluster(
-            centerEmbedding = likedPosts[0].embedding.copyOf(),
-            postIds = mutableListOf(likedPosts[0].id.toString()).toJson(),
-            name = "Interest 1"
-        ))
+        // Initialize centroids using K-means++
+        val centroids = initializeCentroids(likedPosts, k)
+        val clusters = mutableListOf<MutableList<Engagement>>()
+        repeat(k) { clusters.add(mutableListOf()) }
 
-        // For each remaining post, decide: add to existing cluster or create new one?
-        for (post in likedPosts.drop(1)) {
-            val bestMatch = findBestMatchingCluster(post, clusters)
+        var hasConverged = false
+        var iteration = 0
 
-            if (bestMatch != null && bestMatch.similarity > SIMILARITY_THRESHOLD) {
-                // Add to existing cluster
-                addPostToCluster(post, bestMatch.cluster)
-            } else if (clusters.size < MAX_CLUSTERS) {
-                // Create new cluster
-                clusters.add(InterestCluster(
-                    centerEmbedding = post.embedding.copyOf(),
-                    postIds = mutableListOf(post.id.toString()).toJson(),
-                    name = "Interest ${clusters.size + 1}"
-                ))
-            } else {
-                // Add to best available cluster (forced assignment)
-                val fallbackCluster = clusters.maxByOrNull { cluster ->
-                    cosineSimilarity(post.embedding, cluster.centerEmbedding)
+        while (!hasConverged && iteration < MAX_ITERATIONS) {
+            // Clear previous assignments
+            clusters.forEach { it.clear() }
+
+            // Assign each post to nearest centroid
+            for (post in likedPosts) {
+                val nearestCentroid = findNearestCentroid(post.embedding, centroids)
+                clusters[nearestCentroid].add(post)
+            }
+
+            // Update centroids
+            val newCentroids = mutableListOf<FloatArray>()
+            var totalMovement = 0.0
+
+            for (i in clusters.indices) {
+                val clusterPosts = clusters[i]
+                val newCentroid = if (clusterPosts.isNotEmpty()) {
+                    averageEmbeddings(clusterPosts.map { it.embedding })
+                } else {
+                    centroids[i].copyOf() // Keep old centroid if cluster is empty
                 }
-                if (fallbackCluster != null) {
-                    addPostToCluster(post, fallbackCluster)
+
+                totalMovement += euclideanDistance(centroids[i], newCentroid)
+                newCentroids.add(newCentroid)
+            }
+
+            centroids.clear()
+            centroids.addAll(newCentroids)
+
+            hasConverged = totalMovement < CONVERGENCE_THRESHOLD
+            iteration++
+        }
+
+        // Filter out small clusters and convert to InterestCluster
+        return clusters.mapIndexed { index, clusterPosts ->
+            if (clusterPosts.size >= MIN_CLUSTER_SIZE) {
+                InterestCluster(
+                    centerEmbedding = centroids[index],
+                    postIds = clusterPosts.map { it.id.toString() }.toJson(),
+                    name = "Interest ${index + 1}",
+                    strength = calculateClusterStrength(clusterPosts, centroids[index])
+                )
+            } else null
+        }.filterNotNull()
+    }
+
+    private fun initializeCentroids(posts: List<Engagement>, k: Int): MutableList<FloatArray> {
+        val centroids = mutableListOf<FloatArray>()
+        val random = Random.Default
+
+        // First centroid is random
+        centroids.add(posts[random.nextInt(posts.size)].embedding.copyOf())
+
+        // Subsequent centroids chosen with probability proportional to distance
+        for (i in 1 until k) {
+            val distances = posts.map { post ->
+                centroids.minOf { centroid ->
+                    euclideanDistance(post.embedding, centroid)
+                }
+            }
+
+            val totalDistance = distances.sum()
+            val threshold = random.nextDouble() * totalDistance
+            var cumulative = 0.0
+
+            for (j in posts.indices) {
+                cumulative += distances[j]
+                if (cumulative >= threshold) {
+                    centroids.add(posts[j].embedding.copyOf())
+                    break
                 }
             }
         }
 
-        return clusters.filter { it.postIds.toMutableStringList().size >= MIN_CLUSTER_SIZE }
+        return centroids
     }
 
-    private fun findBestMatchingCluster(
-        post: Engagement,
-        clusters: List<InterestCluster>
-    ): ClusterMatch? {
-        return clusters.map { cluster ->
-            ClusterMatch(
-                cosineSimilarity(post.embedding, cluster.centerEmbedding),
-                cluster
-            )
-        }.maxByOrNull { it.similarity }
+    private fun findNearestCentroid(embedding: FloatArray, centroids: List<FloatArray>): Int {
+        return centroids.indices.minByOrNull { index ->
+            euclideanDistance(embedding, centroids[index])
+        } ?: 0
     }
 
-    private fun addPostToCluster(post: Engagement, cluster: InterestCluster) {
-        cluster.postIds.toMutableStringList().add(post.id.toString())
-        updateClusterCenter(cluster, post.embedding)
-    }
+    private fun calculateClusterStrength(posts: List<Engagement>, centroid: FloatArray): Float {
+        if (posts.isEmpty()) return 0f
 
-    private fun updateClusterCenter(cluster: InterestCluster, newEmbedding: FloatArray) {
-        val clusterSize = cluster.postIds.toMutableStringList().size
+        val avgDistance = posts.map {
+            euclideanDistance(it.embedding, centroid)
+        }.average()
 
-        // Weighted average: existing center + new post
-        for (i in cluster.centerEmbedding.indices) {
-            cluster.centerEmbedding[i] = (
-                    (cluster.centerEmbedding[i] * (clusterSize - 1)) + newEmbedding[i]
-                    ) / clusterSize
-        }
+        // Lower distance = higher strength, normalize to 0-1 range
+        return (1.0 / (1.0 + avgDistance)).toFloat()
     }
 
     private fun assignClusterNames(
         clusters: List<InterestCluster>,
         likedPosts: List<Engagement>
     ): List<InterestCluster> {
-        // Simple heuristic naming based on common keywords
-        // You could enhance this with more sophisticated topic modeling
-        return clusters.mapIndexed { index, cluster ->
+        return clusters.map { cluster ->
             val clusterPosts = likedPosts.filter { post ->
                 cluster.postIds.contains(post.id.toString())
             }
 
-            val name = generateClusterName(clusterPosts, index)
+            val name = generateClusterName(clusterPosts)
 
-            cluster.copy().apply {
-                // Update the name - we need to create a new instance since data classes are immutable
-            }
             InterestCluster(
                 centerEmbedding = cluster.centerEmbedding,
                 postIds = cluster.postIds,
@@ -113,34 +160,123 @@ class InterestClusterer {
         }
     }
 
-    private fun generateClusterName(posts: List<Engagement>, index: Int): String {
-        // Simple keyword-based naming
-        // Count common words in post content
-        val allWords = posts.flatMap { post ->
-            post.text.lowercase()
-                .replace(Regex("[^a-z0-9\\s]"), "")
-                .split("\\s+".toRegex())
-                .filter { it.length > 3 } // Skip short words
+    private fun generateClusterName(posts: List<Engagement>): String {
+        // Extract and count meaningful keywords
+        val keywords = posts.flatMap { post ->
+            extractKeywords(post.text)
         }
 
-        val wordCounts = allWords.groupingBy { it }.eachCount()
-        val topWords = wordCounts.entries
+        val keywordCounts = keywords.groupingBy { it }.eachCount()
+        val topKeywords = keywordCounts.entries
             .sortedByDescending { it.value }
-            .take(3)
+            .take(15)
             .map { it.key }
 
-        // Try to create a meaningful name
-        return when {
-            topWords.any { it.contains("tech") || it.contains("code") || it.contains("programming") } -> "Technology"
-            topWords.any { it.contains("cat") || it.contains("dog") || it.contains("pet") } -> "Pets & Animals"
-            topWords.any { it.contains("funny") || it.contains("meme") || it.contains("lol") } -> "Humor"
-            topWords.any { it.contains("news") || it.contains("politics") || it.contains("world") } -> "News & Current Events"
-            topWords.any { it.contains("art") || it.contains("design") || it.contains("creative") } -> "Art & Design"
-            topWords.any { it.contains("game") || it.contains("gaming") || it.contains("play") } -> "Gaming"
-            topWords.any { it.contains("food") || it.contains("recipe") || it.contains("cooking") } -> "Food & Cooking"
-            topWords.isNotEmpty() -> "${topWords.first().replaceFirstChar { it.uppercase() }} & More"
-            else -> "Interest ${index + 1}"
+        // Pattern matching for common topics
+        val patterns = mapOf(
+            "Technology" to listOf(
+                "tech",
+                "code",
+                "programming",
+                "developer",
+                "software",
+                "ai",
+                "ml",
+                "data"
+            ),
+            "Animals" to listOf("cat", "dog", "pet", "animal", "puppy", "kitten", "wildlife"),
+            "Humor" to listOf("funny", "meme", "lol", "joke", "humor", "comedy", "laugh"),
+            "News" to listOf("news", "politics", "world", "breaking", "update", "report"),
+            "Art" to listOf("art", "design", "creative", "photo", "photography", "drawing"),
+            "Gaming" to listOf("game", "gaming", "play", "gamer", "video", "console"),
+            "Food" to listOf("food", "recipe", "cooking", "eat", "restaurant", "delicious"),
+            "Music" to listOf("music", "song", "album", "artist", "concert", "sound"),
+            "Sports" to listOf("sport", "game", "team", "player", "match", "win"),
+            "Science" to listOf("science", "research", "study", "discovery", "experiment")
+        )
+
+        // Find best matching pattern
+        val bestMatch = patterns.entries.maxByOrNull { (_, patternWords) ->
+            patternWords.count { keyword -> topKeywords.contains(keyword) }
         }
+
+        return when {
+            bestMatch != null && bestMatch.value.any { topKeywords.contains(it) } -> bestMatch.key
+            topKeywords.isNotEmpty() -> "${
+                topKeywords.first().replaceFirstChar { it.uppercase() }
+            } Interest"
+
+            else -> "General Interest"
+        }
+    }
+
+    private fun extractKeywords(text: String): List<String> {
+        val stopWords = setOf(
+            "the",
+            "and",
+            "for",
+            "are",
+            "but",
+            "not",
+            "you",
+            "all",
+            "can",
+            "her",
+            "was",
+            "one",
+            "our",
+            "had",
+            "but",
+            "words",
+            "use",
+            "your",
+            "way",
+            "about",
+            "many",
+            "then",
+            "them",
+            "these",
+            "so",
+            "some",
+            "her",
+            "would",
+            "make",
+            "like",
+            "into",
+            "him",
+            "has",
+            "two",
+            "more",
+            "very",
+            "what",
+            "know",
+            "will",
+            "up",
+            "if",
+            "out",
+            "who",
+            "get",
+            "which",
+            "go",
+            "me"
+        )
+
+        return text.lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), " ")
+            .split("\\s+".toRegex())
+            .filter { it.length > 2 && !stopWords.contains(it) }
+            .distinct()
+    }
+
+    private fun euclideanDistance(a: FloatArray, b: FloatArray): Double {
+        require(a.size == b.size) { "Vectors must be same size" }
+
+        var sum = 0.0
+        for (i in a.indices) {
+            val diff = a[i] - b[i]
+            sum += diff * diff
+        }
+        return sqrt(sum)
     }
 
     private fun cosineSimilarity(a: FloatArray, b: FloatArray): Double {

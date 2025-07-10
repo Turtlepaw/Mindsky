@@ -2,6 +2,7 @@ package io.github.turtlepaw.mindsky.routes.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,7 +48,7 @@ fun InterestClusters(navigator: DestinationsNavigator) {
 
     Scaffold(
         topBar = {
-            TopAppBarCommon.withBack(navigator, R.string.interest_sources)
+            TopAppBarCommon.withBack(navigator, R.string.interest_clusters)
         }
     ) { paddingValues ->
         LazyColumn(
@@ -61,17 +62,34 @@ fun InterestClusters(navigator: DestinationsNavigator) {
                 item {
                     LoadingIndicator()
                 }
+            } else if (clusters.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = context.getString(R.string.interest_clusters_empty),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
             } else {
                 items(clusters) {
                     Card {
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(16.dp),
-                            contentAlignment = Alignment.Center
+                            //contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = it.name,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            Text(
+                                text = it.id.toString(),
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }

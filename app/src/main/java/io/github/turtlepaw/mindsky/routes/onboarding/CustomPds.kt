@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.LoginDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
@@ -40,6 +41,7 @@ import io.ktor.http.takeFrom
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import sh.christian.ozone.XrpcBlueskyApi
+import java.net.UnknownServiceException // Added import
 
 enum class ConnectionState {
     Connecting,
@@ -89,9 +91,25 @@ fun CustomPds(navigator: DestinationsNavigator) {
                 val server = api.describeServer()
                 Log.d("CustomPds", "Connected to server: ${server}")
                 isConnected = ConnectionState.Connected
+            } catch (e: UnknownServiceException) {
+                isConnected = ConnectionState.Failed
+                if (e.message?.contains("CLEARTEXT") == true &&
+                    (pdsUrl.startsWith("http://localhost") || pdsUrl.startsWith("http://127.0.0.1"))
+                ) {
+                    Log.w(
+                        "CustomPds",
+                        "CLEARTEXT communication to localhost is not permitted. PDS: $pdsUrl. Details: ${e.message}"
+                    )
+                } else {
+                    Log.e(
+                        "CustomPds",
+                        "Unknown service error connecting to PDS: $pdsUrl. Details: ${e.message}",
+                        e
+                    )
+                }
             } catch (e: Exception) {
                 isConnected = ConnectionState.Failed
-                Log.e("CustomPds", "Failed to connect to PDS: ${e.message}", e)
+                Log.e("CustomPds", "Failed to connect to PDS: $pdsUrl. Details: ${e.message}", e)
             }
         }
     }
@@ -152,17 +170,31 @@ fun CustomPds(navigator: DestinationsNavigator) {
                     .fillMaxWidth()
                     .padding(16.dp)
                     .align(Alignment.BottomCenter),
+                enabled = isConnected == ConnectionState.Connected,
                 onClick = {
+                    when (isConnected) {
+                        ConnectionState.Connected -> {
+                            viewModel.pds = pdsUrl
+                            navigator.navigate(LoginDestination)
+                        }
+
+                        ConnectionState.Idle, ConnectionState.Failed -> {
+                            // Do nothing, just show the current state
+                        }
+
+                        ConnectionState.Connecting -> {
+                            // Already connecting, do nothing
+                        }
+                    }
                 }
             ) {
                 when (isConnected) {
                     ConnectionState.Connecting -> Text("Connecting...")
-                    ConnectionState.Connected -> Text("Connected! Proceed")
-                    ConnectionState.Failed -> Text("Connection Failed. Try Again")
-                    ConnectionState.Idle -> Text("Continue")
+                    ConnectionState.Connected -> Text("Continue")
+                    ConnectionState.Failed -> Text("Can't connect to PDS")
+                    ConnectionState.Idle -> Text("Can't connect to PDS")
                 }
             }
         }
     }
 }
-

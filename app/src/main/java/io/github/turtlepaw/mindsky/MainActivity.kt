@@ -37,6 +37,7 @@ import com.ramcosta.composedestinations.generated.destinations.InitialOnboarding
 import io.github.turtlepaw.mindsky.auth.SessionManager
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalFeedModel
+import io.github.turtlepaw.mindsky.di.LocalLabelManager
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
@@ -143,7 +144,8 @@ class MainActivity : ComponentActivity() {
                 LocalSessionManager provides rememberedSessionManager,
                 LocalAuthTokensFlow provides authTokensFlow,
                 LocalProfileModel provides viewModel,
-                LocalFeedModel provides feedViewModel
+                LocalFeedModel provides feedViewModel,
+                LocalLabelManager provides mindskyApplication.labelManager
             ) {
                 MindskyTheme {
                     ProvidePreferenceLocals {

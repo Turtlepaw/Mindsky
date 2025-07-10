@@ -4,11 +4,13 @@ import android.content.Intent
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -42,10 +44,12 @@ import com.ramcosta.composedestinations.generated.destinations.PdsListDestinatio
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.MindskyApplication
 import io.github.turtlepaw.mindsky.auth.UserSession
+import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
 import io.github.turtlepaw.mindsky.replaceCurrent
+import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
 import kotlinx.coroutines.launch
 import sh.christian.ozone.api.BlueskyAuthPlugin
 import sh.christian.ozone.api.response.AtpResponse
@@ -67,7 +71,13 @@ fun Login(navigator: DestinationsNavigator) {
     val authTokensFlow = LocalAuthTokensFlow.current
     val api = LocalMindskyApi.current
 
-    Scaffold {
+    Scaffold(
+        topBar = {
+            TopAppBarCommon.withBack(
+                navigator,
+            )
+        }
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -77,20 +87,46 @@ fun Login(navigator: DestinationsNavigator) {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                "Login to Bluesky",
-                style = MaterialTheme.typography.headlineMedium
+                "Login to",
+                style = MaterialTheme.typography.titleSmall
             )
-            Spacer(modifier = Modifier.height(32.dp))
-            OutlinedTextField(
-                value = hostUrl,
-                onValueChange = { hostUrl = it.trim() },
-                label = { Text("Bluesky Host URL") },
-                placeholder = { Text("e.g., https://bsky.social") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+
+            val pds = publicPdsList.find { it.url == viewModel.pds }
+            Row(
+                modifier = Modifier.padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
+            ) {
+                if (pds != null && pds.icon != null) {
+                    Avatar(
+                        modifier = Modifier.size(35.dp),
+                        pds.icon,
+                        "${pds.title} icon",
+                        clip = MaterialTheme.shapes.medium
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = if (pds == null) Alignment.CenterHorizontally else Alignment.Start,
+                ) {
+                    Text(
+                        pds?.title ?: "Custom PDS",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+//            OutlinedTextField(
+//                value = hostUrl,
+//                onValueChange = { hostUrl = it.trim() },
+//                label = { Text("Bluesky Host URL") },
+//                placeholder = { Text("e.g., https://bsky.social") },
+//                modifier = Modifier.fillMaxWidth(),
+//                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+//                singleLine = true
+//            )
+//            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -200,7 +236,7 @@ fun Login(navigator: DestinationsNavigator) {
                 }
                 OutlinedButton(
                     onClick = {
-                        navigator.navigate(PdsListDestination())
+                        navigator.navigate(PdsListDestination)
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -208,6 +244,15 @@ fun Login(navigator: DestinationsNavigator) {
 //                    Spacer(modifier = Modifier.width(8.dp))
 //                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in new")
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    "Provider URL: ${pds?.url ?: viewModel.pds}",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
             }
             errorMessage?.let {
                 Spacer(modifier = Modifier.height(16.dp))

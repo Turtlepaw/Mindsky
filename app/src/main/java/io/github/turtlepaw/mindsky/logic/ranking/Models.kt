@@ -64,7 +64,7 @@ data class InterestCluster(
     var centerEmbedding: FloatArray,
     var postIds: String, // JSON-encoded list of post IDs
     var name: String,
-    var strength: Double = 1.0,
+    var strength: Float = 0.0f,
     var profileId: Long = 0 // foreign key for backlink
 )
 
@@ -73,7 +73,7 @@ data class ClusterMatch(
     var cluster: InterestCluster
 )
 
-fun MutableList<String>.toJson(): String = encodeToString(this)
+fun List<String>.toJson(): String = encodeToString(this)
 
-fun String.toMutableStringList(): MutableList<String> =
+fun String.toStringList(): List<String> =
     decodeFromString(this)
