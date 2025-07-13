@@ -18,6 +18,7 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostDensity
+import io.github.turtlepaw.mindsky.di.LocalFeedModel
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import kotlinx.coroutines.launch
 import sh.christian.ozone.api.AtIdentifier
@@ -29,6 +30,7 @@ import sh.christian.ozone.api.RKey
 @Composable
 fun QuotePost(record: RecordViewRecordUnion.ViewRecord, navigator: DestinationsNavigator) {
     val api = LocalMindskyApi.current
+    val viewModel = LocalFeedModel.current
     var isLoading by remember { mutableStateOf(true) }
     var postRecord by remember { mutableStateOf<PostView?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -36,18 +38,27 @@ fun QuotePost(record: RecordViewRecordUnion.ViewRecord, navigator: DestinationsN
     LaunchedEffect(record) {
         coroutineScope.launch {
             isLoading = true
-            val recordData = record.value.toStrongRef()
-            val data = api.getPosts(
-                GetPostsQueryParams(
-                    listOf(
-                        record.value.uri
-                    )
-                )
-            ).maybeResponse()
-            if (data != null) {
-                postRecord = data.posts.first()
+            try {
+                val recordData = record.value.toStrongRef()
+                val cached = viewModel.getCachedPost(record.value.uri)
+                if (cached != null) {
+                    postRecord = cached
+                } else {
+                    val data = api.getPosts(
+                        GetPostsQueryParams(
+                            listOf(
+                                record.value.uri
+                            )
+                        )
+                    ).maybeResponse()
+                    if (data != null) {
+                        postRecord = data.posts.first()
+                        viewModel.addCachedPost(postRecord!!)
+                    }
+                }
+            } finally {
+                isLoading = false
             }
-            isLoading = false
         }
     }
 

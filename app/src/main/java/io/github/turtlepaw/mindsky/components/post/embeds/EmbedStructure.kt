@@ -1,5 +1,6 @@
 package io.github.turtlepaw.mindsky.components.post.embeds
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CardDefaults
@@ -16,7 +17,9 @@ fun EmbedStructure(
     content: @Composable (ColumnScope.() -> Unit),
 ) {
     OutlinedCard(
-        modifier = modifier.padding(vertical = 8.dp),
+        modifier = modifier
+            .padding(vertical = 8.dp)
+            .animateContentSize(),
         border = CardDefaults.outlinedCardBorder().copy(width = 0.5.dp),
         onClick = onClick,
         enabled = enabled,

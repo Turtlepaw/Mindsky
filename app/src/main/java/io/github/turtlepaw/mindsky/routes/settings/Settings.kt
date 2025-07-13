@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -25,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.work.WorkManager
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
+import com.ramcosta.composedestinations.generated.destinations.AppearanceDestination
 import com.ramcosta.composedestinations.generated.destinations.InterestClustersDestination
-import com.ramcosta.composedestinations.generated.destinations.InterestSourcesDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.utils.StringComposable
@@ -49,16 +51,42 @@ fun Settings(navigator: DestinationsNavigator) {
                 .padding(paddingValues),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+//            preference(
+//                key = "interest_sources",
+//                title = {
+//                    R.string.interest_sources.StringComposable()
+//                },
+//                summary = {
+//                    R.string.interest_sources_description.StringComposable()
+//                },
+//                onClick = {
+//                    navigator.navigate(InterestSourcesDestination)
+//                },
+//                widgetContainer = {
+//                    Icon(
+//                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+//                        contentDescription = "Arrow forward",
+//                        tint = MaterialTheme.colorScheme.onSurface,
+//                        modifier = Modifier.padding(start = 8.dp, end = 16.dp)
+//                    )
+//                }
+//            )
             preference(
-                key = "interest_sources",
+                key = "interest_clusters",
                 title = {
-                    R.string.interest_sources.StringComposable()
+                    R.string.interest_clusters.StringComposable()
                 },
                 summary = {
-                    R.string.interest_sources_description.StringComposable()
+                    R.string.interest_clusters_description.StringComposable()
                 },
                 onClick = {
-                    navigator.navigate(InterestSourcesDestination)
+                    navigator.navigate(InterestClustersDestination)
+                },
+                icon = {
+                    Icon(
+                        Icons.Rounded.Category,
+                        contentDescription = "Category",
+                    )
                 },
                 widgetContainer = {
                     Icon(
@@ -70,15 +98,21 @@ fun Settings(navigator: DestinationsNavigator) {
                 }
             )
             preference(
-                key = "interest_clusters",
+                key = "appearance",
                 title = {
-                    R.string.interest_clusters.StringComposable()
+                    R.string.appearance.StringComposable()
                 },
                 summary = {
-                    R.string.interest_clusters_description.StringComposable()
+                    R.string.appearance_description.StringComposable()
                 },
                 onClick = {
-                    navigator.navigate(InterestClustersDestination)
+                    navigator.navigate(AppearanceDestination)
+                },
+                icon = {
+                    Icon(
+                        Icons.Rounded.Palette,
+                        contentDescription = "Palette",
+                    )
                 },
                 widgetContainer = {
                     Icon(

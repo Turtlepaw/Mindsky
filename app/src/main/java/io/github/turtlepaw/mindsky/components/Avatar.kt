@@ -1,6 +1,7 @@
 package io.github.turtlepaw.mindsky.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -25,18 +26,29 @@ fun Avatar(
     avatarUrl: String? = null,
     contentDescription: String?,
     clip: Shape = CircleShape,
+    onClick: (() -> Unit)? = null,
 ) {
     if (avatarUrl != null) {
         AsyncImage(
             model = avatarUrl,
             contentDescription = contentDescription,
-            modifier = modifier.clip(
-                clip
-            ),
+            modifier = modifier
+                .clip(clip)
+                .then(
+                    if (onClick != null) {
+                        Modifier.clickable(
+                            onClick = onClick
+                        )
+                    } else Modifier
+                )
         )
     } else {
         FallbackAvatar(
-            modifier = modifier,
+            modifier = modifier.then(
+                if (onClick != null)
+                    Modifier.clickable(onClick = onClick)
+                else Modifier
+            ),
             contentDescription = contentDescription,
             shape = clip,
         )

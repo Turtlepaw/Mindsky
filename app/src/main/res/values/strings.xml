@@ -13,12 +13,24 @@
     <!--  General  -->
     <string name="blocked">Blocked</string>
     <string name="post">Post</string>
+    <string name="followers">Followers</string>
+    <string name="following">Following</string>
 
     <!--  Settings  -->
     <string name="settings_title">Settings</string>
     <string name="interest_sources">Interest Sources</string>
     <string name="interest_sources_description">Select the sources you want to see in your feed</string>
     <string name="following_feed_mix">Mix following feed</string>
+
+    <!--  Appearance  -->
+    <string name="appearance">Appearance</string>
+    <string name="appearance_description">Customize the look and feel of the app</string>
+    <string name="dark_theme">Dark Theme</string>
+    <string name="dark_theme_dim">Dim</string>
+    <string name="dark_theme_dark">Pure black</string>
+    <string name="dark_theme_dark_description">Enable pure black for dark mode</string>
+    <string name="show_avatar_labelers">Show labeler avatars</string>
+    <string name="show_avatar_labelers_description">Shows labeler\'s avatars next to labels</string>
 
     <!--  Interest clusters  -->
     <string name="interest_clusters">Interest Clusters</string>

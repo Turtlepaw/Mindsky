@@ -73,7 +73,7 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
 import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
-import com.ramcosta.composedestinations.generated.destinations.ProfileDestination
+import com.ramcosta.composedestinations.generated.destinations.MyProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.Avatar
@@ -200,16 +200,16 @@ fun Feed(nav: DestinationsNavigator) {
 
 
     // Updated LaunchedEffect to react to selectedDestination changes
-    LaunchedEffect(selectedDestination, viewModel) {
-        Log.d(
-            "Feed",
-            "LaunchedEffect for selectedDestination: ${'$'}{FeedDestination.values()[selectedDestination]}. Requesting fetch."
-        )
-        // USER ACTION REQUIRED in ViewModel:
-        // viewModel.fetchFeed() must be adapted to fetch data based on the current
-        // FeedDestination.values()[selectedDestination].
-        viewModel.fetchFeed()
-    }
+//    LaunchedEffect(selectedDestination, viewModel) {
+//        Log.d(
+//            "Feed",
+//            "LaunchedEffect for selectedDestination: ${'$'}{FeedDestination.values()[selectedDestination]}. Requesting fetch."
+//        )
+//        // USER ACTION REQUIRED in ViewModel:
+//        // viewModel.fetchFeed() must be adapted to fetch data based on the current
+//        // FeedDestination.values()[selectedDestination].
+//        viewModel.fetchFeed()
+//    }
 
     LaunchedEffect(Unit) {
         val files = listOf(
@@ -492,7 +492,7 @@ fun TopBarButtons(listState: LazyListState, navigator: DestinationsNavigator) {
                                 .clip(CircleShape)
                                 .clickable {
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.ContextClick)
-                                    navigator.navigate(ProfileDestination)
+                                    navigator.navigate(MyProfileDestination)
                                 },
                             contentDescription = "Avatar"
                         )

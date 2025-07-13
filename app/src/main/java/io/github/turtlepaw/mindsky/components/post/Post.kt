@@ -43,6 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +69,7 @@ import com.atproto.repo.CreateRecordRequest
 import com.atproto.repo.DeleteRecordRequest
 import com.atproto.repo.StrongRef
 import com.ramcosta.composedestinations.generated.destinations.ImageDestination
+import com.ramcosta.composedestinations.generated.destinations.ProfileDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.auth.SessionManager
@@ -155,7 +157,11 @@ fun PostComponent(
                 modifier = it,
                 avatarUrl = author.avatar?.uri,
                 contentDescription = author.displayName ?: author.handle.handle,
-            )
+            ) {
+                navigator.navigate(
+                    ProfileDestination(author.did.did)
+                )
+            }
         },
         headline = {
             PostHeadline(postRecord.createdAt, author, density)
@@ -460,11 +466,17 @@ fun PostComponent(
 
             // This is an assumed structure for video embeds.
             // Replace with the actual structure if different.
-            is PostViewEmbedUnion.ExternalView -> {
-                val externalEmbed = (postView.embed as PostViewEmbedUnion.ExternalView).value
+            is PostViewEmbedUnion.VideoView -> {
+                val externalEmbed = (postView.embed as PostViewEmbedUnion.VideoView)
                 // Assuming the video URL is in externalEmbed.external.uri
                 // You might need to adjust this based on the actual data structure
-                VideoEmbed(videoUrl = externalEmbed.external.uri.uri)
+                VideoEmbed(videoUrl = externalEmbed.value.playlist.uri)
+            }
+
+            is PostViewEmbedUnion.ExternalView -> {
+                val externalEmbed = (postView.embed as PostViewEmbedUnion.ExternalView).value
+
+
             }
 
             else -> {}
@@ -477,7 +489,7 @@ fun AtUri.getRkey(): RKey {
 }
 
 @Composable
-fun LoadingPost() {
+fun rememberLoadingColor(): Color {
     val infiniteTransition = rememberInfiniteTransition()
 
     val alpha by infiniteTransition.animateFloat(
@@ -489,12 +501,19 @@ fun LoadingPost() {
         )
     )
 
+    return MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+}
+
+@Composable
+fun LoadingPost() {
+    val color = rememberLoadingColor()
+
     PostStructure(
         avatar = {
             Box(
                 modifier = it
                     .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        color,
                         CircleShape
                     )
             )
@@ -506,7 +525,7 @@ fun LoadingPost() {
                     .fillMaxWidth(0.5f)
                     .height(10.dp)
                     .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        color,
                         MaterialTheme.shapes.small
                     )
             )
@@ -522,7 +541,7 @@ fun LoadingPost() {
                     .fillMaxWidth(if (it == 2) 0.8f else 0.9f)
                     .height(9.dp)
                     .background(
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                        color,
                         MaterialTheme.shapes.small
                     )
             )

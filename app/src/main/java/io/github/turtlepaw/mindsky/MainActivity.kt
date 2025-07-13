@@ -41,6 +41,8 @@ import io.github.turtlepaw.mindsky.di.LocalLabelManager
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
 import io.github.turtlepaw.mindsky.di.LocalSessionManager
+import io.github.turtlepaw.mindsky.preferences.LocalPreferences
+import io.github.turtlepaw.mindsky.preferences.PreferenceProvider
 import io.github.turtlepaw.mindsky.repositories.ProfileRepository
 import io.github.turtlepaw.mindsky.routes.FeedViewModelFactory
 import io.github.turtlepaw.mindsky.ui.theme.MindskyTheme
@@ -49,6 +51,7 @@ import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModel
 import io.github.turtlepaw.mindsky.viewmodels.ProfileViewModelFactory
 import io.github.turtlepaw.mindsky.workers.WorkerManager.enqueuePeriodicFeedWorkers
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
+import me.zhanghai.compose.preference.getPreferenceFlow
 
 object DefaultSlideFadeTransitions : NavHostAnimatedDestinationStyle() {
     private val fastOutExtraSlowIn = CubicBezierEasing(0.05f, 0f, 0.133333f, 1f)
@@ -139,26 +142,31 @@ class MainActivity : ComponentActivity() {
             )
             val feedViewModel: FeedViewModel = viewModel(factory = FeedViewModelFactory(blueskyApi))
 
-            CompositionLocalProvider(
-                LocalMindskyApi provides blueskyApi, // Use API from Application
-                LocalSessionManager provides rememberedSessionManager,
-                LocalAuthTokensFlow provides authTokensFlow,
-                LocalProfileModel provides viewModel,
-                LocalFeedModel provides feedViewModel,
-                LocalLabelManager provides mindskyApplication.labelManager
-            ) {
-                MindskyTheme {
-                    ProvidePreferenceLocals {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.background)
+            PreferenceProvider {
+                CompositionLocalProvider(
+                    LocalMindskyApi provides blueskyApi, // Use API from Application
+                    LocalSessionManager provides rememberedSessionManager,
+                    LocalAuthTokensFlow provides authTokensFlow,
+                    LocalProfileModel provides viewModel,
+                    LocalFeedModel provides feedViewModel,
+                    LocalLabelManager provides mindskyApplication.labelManager,
+                ) {
+                    MindskyTheme {
+                        ProvidePreferenceLocals(
+                            flow = LocalPreferences.current.getSharedPreferences()
+                                .getPreferenceFlow()
                         ) {
-                            DestinationsNavHost(
-                                navGraph = NavGraphs.root,
-                                start = startRoute,
-                                defaultTransitions = DefaultSlideFadeTransitions
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                DestinationsNavHost(
+                                    navGraph = NavGraphs.root,
+                                    start = startRoute,
+                                    defaultTransitions = DefaultSlideFadeTransitions
+                                )
+                            }
                         }
                     }
                 }

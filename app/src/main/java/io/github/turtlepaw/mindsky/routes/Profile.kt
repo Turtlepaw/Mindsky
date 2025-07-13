@@ -53,7 +53,7 @@ import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
-fun Profile(navigator: DestinationsNavigator) {
+fun MyProfile(navigator: DestinationsNavigator) {
     var likes by remember { mutableStateOf<List<Pair<Engagement?, PostView>>?>(null) }
     val api = LocalMindskyApi.current
 

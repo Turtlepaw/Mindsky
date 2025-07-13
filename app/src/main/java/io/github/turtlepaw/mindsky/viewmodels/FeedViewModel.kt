@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.bsky.feed.FeedViewPost
+import app.bsky.feed.FeedViewPostReasonUnion
+import app.bsky.feed.GetAuthorFeedQueryParams
 import app.bsky.feed.GetPostsQueryParams
 import app.bsky.feed.GetTimelineQueryParams
 import app.bsky.feed.PostView
@@ -15,6 +17,7 @@ import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts
 import kotlinx.coroutines.launch
 import sh.christian.ozone.BlueskyApi
 import sh.christian.ozone.api.AtUri
+import sh.christian.ozone.api.Did
 
 class FeedViewModel(
     private val api: BlueskyApi
@@ -32,6 +35,79 @@ class FeedViewModel(
 
     var error = mutableStateOf<String?>(null)
         private set
+
+    var cachedPosts = mutableMapOf<AtUri, PostView>()
+        private set
+
+    fun addCachedPost(post: PostView) {
+        cachedPosts[post.uri] = post
+    }
+
+    fun getCachedPost(uri: AtUri): PostView? {
+        return cachedPosts[uri]
+    }
+
+    var profilePosts = mutableStateOf<List<FeedViewPost>>(emptyList())
+        private set
+
+    private var profileCursor: String? = null
+    var isFetchingProfile = mutableStateOf(false)
+        private set
+
+
+    fun fetchProfilePosts(
+        actor: Did,
+        limit: Int = 30,
+        isRefresh: Boolean = false
+    ) {
+        if (isFetchingProfile.value) return
+
+        viewModelScope.launch {
+            if (isRefresh) isFetchingProfile.value = true
+            error.value = null
+            if (isRefresh) {
+                profileCursor = null
+                profilePosts.value = emptyList() // Optional: clear UI fast
+            }
+
+            try {
+                val response = api.getAuthorFeed(
+                    GetAuthorFeedQueryParams(
+                        actor = actor,
+                        limit = limit.toLong(),
+                        cursor = profileCursor
+                    )
+                ).maybeResponse()
+
+                val newPosts = FeedTuner.cleanReplies(response?.feed ?: emptyList())
+                profileCursor = response?.cursor
+
+                // Cache them
+                newPosts.forEach { addCachedPost(it.post) }
+
+                // Merge or set
+                profilePosts.value = if (isRefresh) {
+                    newPosts
+                } else {
+                    profilePosts.value + newPosts
+                }
+
+            } catch (e: Exception) {
+                Log.e("FeedVM", "Error fetching profile posts", e)
+                error.value = "Failed to load profile: ${e.message}"
+            } finally {
+                isFetchingProfile.value = false
+            }
+        }
+    }
+
+    fun loadMoreProfilePosts(limit: Int = 30) {
+        val assumedActor =
+            profilePosts.value.firstOrNull { it.reason !is FeedViewPostReasonUnion.ReasonRepost }?.post?.author?.did
+        if (isFetchingProfile.value || profileCursor == null || assumedActor == null) return
+
+        fetchProfilePosts(assumedActor, limit, isRefresh = false)
+    }
 
     private var lastFetchTime = 0L
     private var followingFeedCursor: String? = null
