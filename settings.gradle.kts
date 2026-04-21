@@ -1,5 +1,8 @@
 import org.gradle.kotlin.dsl.flatDir
 
+include(":fetch_and_cache")
+
+
 
 pluginManagement {
     resolutionStrategy {
@@ -20,6 +23,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+}
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)

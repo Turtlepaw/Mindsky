@@ -12,6 +12,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Coffee
+import androidx.compose.material.icons.rounded.LocalCafe
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,38 +39,47 @@ import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
 
 data class Pds(
-    val icon: String?,
-    val title: String,
+    val iconUrl: String?,
+    val name: String,
     val description: String,
     val url: String,
     /**
      * if the account is verified by @bsky.app
      */
-    val verified: Boolean = false,
-)
+    val verified: Boolean = false
+) {
+    companion object {
+        val BlueskyPbc = Pds(
+            iconUrl = "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihwihm6kpd6zuwhhlro75p5qks5qtrcu55jp3gddbfjsieiv7wuka",
+            name = "Bluesky PBC",
+            description = "The official Bluesky PDS provided by Bluesky PBC.",
+            url = "https://bsky.social",
+        )
 
-val publicPdsList = listOf<Pds>(
-    Pds(
-        "https://cdn.bsky.app/img/avatar/plain/did:plc:z72i7hdynmk6r22z27h6tvur/bafkreihagr2cmvl2jt4mgx3sppwe2it3fwolkrbtjrhcnwjk4jdijhsoze@jpeg",
-        "Bluesky PBC",
-        "The official Bluesky PDS provided by Bluesky PBC.",
-        "https://bsky.social",
-        // @bsky.app is a trusted verifier
-        verified = true
-    ),
-    Pds(
-        "https://cdn.bsky.app/img/avatar/plain/did:web:witchcraft.systems/bafkreihxuizk4vku4wkmexc5hcemp2huwt5qpdx7p2r3ejnygg4plglkwu@jpeg",
-        "witchcraft.systems",
-        "witches with ethernet switches",
-        "https://pds.witchcraft.systems"
-    ),
-    Pds(
-        null,
-        "Your own PDS",
-        "You can also run your own PDS. If you have one, enter the URL below.",
-        "",
-    )
-)
+        val WitchcraftSystems = Pds(
+            iconUrl = "https://cdn.bsky.app/img/avatar/plain/did:web:witchcraft.systems/bafkreihxuizk4vku4wkmexc5hcemp2huwt5qpdx7p2r3ejnygg4plglkwu@jpeg",
+            name = "witchcraft.systems",
+            description = "witches with ethernet switches",
+            url = "https://pds.witchcraft.systems"
+        )
+
+        val SelfHostedSocial = Pds(
+            iconUrl = null,
+            name = "selfhosted.social",
+            description = "PDS run by @baileytownsend.dev",
+            url = "https://selfhosted.social/"
+        )
+
+        val CustomPds = Pds(
+            iconUrl = null,
+            name = "Your own PDS",
+            description = "You can also run your own PDS. If you have one, enter the URL below.",
+            url = ""
+        )
+
+        val All = listOf(BlueskyPbc, WitchcraftSystems, SelfHostedSocial, CustomPds)
+    }
+}
 
 @Destination<RootGraph>
 @Composable
@@ -87,11 +99,11 @@ fun PdsList(navigator: DestinationsNavigator) {
                 .fillMaxSize()
                 .padding(it)
         ) {
-            itemsIndexed(publicPdsList) { index, pds ->
+            itemsIndexed(Pds.All) { index, pds ->
                 PdsItem(
                     pds = pds,
                     index = index,
-                    listSize = publicPdsList.size
+                    listSize = Pds.All.size
                 ) {
                     viewModel.pds = pds.url
                     navigator.navigate(
@@ -131,13 +143,23 @@ fun PdsItem(pds: Pds, index: Int, listSize: Int, onClick: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (pds.icon != null) {
+                if (pds.iconUrl != null) {
                     Avatar(
                         modifier = Modifier.size(50.dp),
-                        pds.icon,
-                        "${pds.title} icon",
+                        pds.iconUrl,
+                        "${pds.name} icon",
                         clip = MaterialTheme.shapes.large
                     )
+                } else {
+                    when (pds){
+                        Pds.SelfHostedSocial -> Avatar(
+                            modifier = Modifier.size(50.dp),
+                            Icons.Rounded.LocalCafe,
+                            contentDescription = "Local Cafe",
+                            clip = MaterialTheme.shapes.large
+                        )
+                        Pds.CustomPds -> null
+                    }
                 }
 
                 Column(
@@ -151,7 +173,7 @@ fun PdsItem(pds: Pds, index: Int, listSize: Int, onClick: () -> Unit) {
                         ),
                     ) {
                         Text(
-                            pds.title,
+                            pds.name,
                             style = MaterialTheme.typography.titleMedium,
                             overflow = TextOverflow.Ellipsis
                         )

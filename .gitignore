@@ -17,3 +17,6 @@ local.properties
 /pipelines/cmlm-en-base
 pipelines/cmlm-en-base.tflite
 pipelines/cmlm-en-base.tar.gz
+/docs/.next
+/docs/node_modules
+/.kotlin

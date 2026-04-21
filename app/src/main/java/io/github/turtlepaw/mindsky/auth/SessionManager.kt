@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import androidx.core.content.edit
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,7 @@ class SessionManager(private val context: Context) {
     private val alias = "mindsky_aes_key"
     private val prefsName = "mindsky_prefs"
     private val keySession = "user_session"
+    private val keyOAuthState = "oauth_state"
     private val gson = Gson()
 
     private val _sessionFlow = MutableStateFlow<UserSession?>(null)
@@ -92,8 +94,17 @@ class SessionManager(private val context: Context) {
         val encrypted = prefs.getString(keySession, null) ?: return null
         return try {
             val decrypted = decrypt(encrypted)
-            gson.fromJson(decrypted, UserSession::class.java)
+            val session = gson.fromJson(decrypted, UserSession::class.java)
+            if (session.pdsUrl.isBlank()) {
+                Log.w("SessionManager", "Stored session missing PDS URL; clearing.")
+                clearSession()
+                null
+            } else {
+                session
+            }
         } catch (e: Exception) {
+            Log.w("SessionManager", "Failed to load session; clearing.", e)
+            clearSession()
             null
         }
     }
@@ -103,6 +114,35 @@ class SessionManager(private val context: Context) {
         _sessionFlow.value = null
     }
 
+    fun saveOAuthState(oauthState: OAuthState) {
+        val json = gson.toJson(oauthState)
+        val encrypted = encrypt(json)
+        prefs.edit { putString(keyOAuthState, encrypted) }
+    }
+
+    fun getOAuthState(): OAuthState? {
+        val encrypted = prefs.getString(keyOAuthState, null) ?: return null
+        return try {
+            val decrypted = decrypt(encrypted)
+            gson.fromJson(decrypted, OAuthState::class.java)
+        } catch (e: Exception) {
+            Log.w("SessionManager", "Failed to load OAuth state; clearing.", e)
+            clearOAuthState()
+            null
+        }
+    }
+
+    fun clearOAuthState() {
+        prefs.edit { remove(keyOAuthState) }
+    }
+
     private val prefs: SharedPreferences
         get() = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 }
+
+data class OAuthState(
+    val state: String,
+    val codeVerifier: String,
+    val authServerUrl: String,
+    val handle: String
+)

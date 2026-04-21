@@ -1,6 +1,5 @@
 package io.github.turtlepaw.mindsky.routes.onboarding
 
-import android.content.Intent
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -24,52 +23,50 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import com.atproto.server.CreateSessionRequest
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.DownloadModelDestination
 import com.ramcosta.composedestinations.generated.destinations.PdsListDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.MindskyApplication
-import io.github.turtlepaw.mindsky.auth.UserSession
+import io.github.turtlepaw.mindsky.auth.AuthState
 import io.github.turtlepaw.mindsky.components.Avatar
-import io.github.turtlepaw.mindsky.di.LocalAuthTokensFlow
-import io.github.turtlepaw.mindsky.di.LocalMindskyApi
-import io.github.turtlepaw.mindsky.di.LocalSessionManager
 import io.github.turtlepaw.mindsky.replaceCurrent
 import io.github.turtlepaw.mindsky.routes.settings.TopAppBarCommon
-import kotlinx.coroutines.launch
-import sh.christian.ozone.api.BlueskyAuthPlugin
-import sh.christian.ozone.api.response.AtpResponse
+import io.github.turtlepaw.mindsky.viewmodels.rememberAuthViewModel
 
 @Destination<RootGraph>
 @Composable
 fun Login(navigator: DestinationsNavigator) {
     val viewModel = rememberOnboardingViewModel()
 
-    var username by remember { mutableStateOf("") }
-    var appPassword by remember { mutableStateOf("") }
-    var hostUrl = viewModel.pds
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val coroutineScope = rememberCoroutineScope()
+    var handle by remember { mutableStateOf("") }
     val context = LocalContext.current
 
-    val sessionManager = LocalSessionManager.current
-    val authTokensFlow = LocalAuthTokensFlow.current
-    val api = LocalMindskyApi.current
+    val authViewModel = rememberAuthViewModel()
+    val authState by authViewModel.authState.collectAsState()
+    val isLoading = authState == AuthState.Loading
+    val errorMessage = (authState as? AuthState.Error)?.message
+
+    androidx.compose.runtime.LaunchedEffect(authState) {
+        if (authState is AuthState.Authenticated) {
+            val session = (authState as AuthState.Authenticated).session
+            val application = context.applicationContext as MindskyApplication
+            application.configureAuthenticatedApi(session)
+            navigator.popBackStack()
+            navigator.replaceCurrent(DownloadModelDestination)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -91,17 +88,17 @@ fun Login(navigator: DestinationsNavigator) {
                 style = MaterialTheme.typography.titleSmall
             )
 
-            val pds = publicPdsList.find { it.url == viewModel.pds }
+            val pds = Pds.All.find { it.url == viewModel.pds }
             Row(
                 modifier = Modifier.padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
             ) {
-                if (pds != null && pds.icon != null) {
+                if (pds != null && pds.iconUrl != null) {
                     Avatar(
                         modifier = Modifier.size(35.dp),
-                        pds.icon,
-                        "${pds.title} icon",
+                        pds.iconUrl,
+                        "${pds.name} icon",
                         clip = MaterialTheme.shapes.medium
                     )
                 }
@@ -110,7 +107,7 @@ fun Login(navigator: DestinationsNavigator) {
                     horizontalAlignment = if (pds == null) Alignment.CenterHorizontally else Alignment.Start,
                 ) {
                     Text(
-                        pds?.title ?: "Custom PDS",
+                        pds?.name ?: "Custom PDS",
                         style = MaterialTheme.typography.titleLarge
                     )
                 }
@@ -128,127 +125,55 @@ fun Login(navigator: DestinationsNavigator) {
 //            )
 //            Spacer(modifier = Modifier.height(16.dp))
             OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("Handle or DID") },
+                value = handle,
+                onValueChange = { handle = it },
+                label = { Text("Handle") },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = appPassword,
-                onValueChange = { appPassword = it },
-                label = { Text("App Password") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 singleLine = true
             )
             Spacer(modifier = Modifier.height(24.dp))
-            if (isLoading) {
-                CircularProgressIndicator()
-            } else {
-                Button(
-                    onClick = {
-                        isLoading = true
-                        errorMessage = null
-                        coroutineScope.launch {
-                            try {
-                                Log.d(
-                                    "LoginRoute",
-                                    "Attempting login to host: $hostUrl for user: $username"
-                                )
-                                val request = CreateSessionRequest(
-                                    identifier = username,
-                                    password = appPassword
-                                )
-                                when (val result = api.createSession(request)) {
-                                    is AtpResponse.Success -> {
-                                        Log.d(
-                                            "LoginRoute",
-                                            "Login successful for ${result.response.handle} on $hostUrl"
-                                        )
-                                        val newSession = UserSession(
-                                            did = result.response.did.did,
-                                            handle = result.response.handle.handle,
-                                            accessToken = result.response.accessJwt,
-                                            refreshToken = result.response.refreshJwt,
-                                            host = hostUrl
-                                        )
-                                        sessionManager.saveSession(newSession)
-
-                                        authTokensFlow.value = BlueskyAuthPlugin.Tokens(
-                                            auth = newSession.accessToken,
-                                            refresh = newSession.refreshToken
-                                        )
-
-                                        val application =
-                                            context.applicationContext as MindskyApplication
-                                        application.configureAuthenticatedApi(newSession)
-                                        Log.i(
-                                            "LoginRoute",
-                                            "Global API client update initiated for host: ${newSession.host}"
-                                        )
-
-                                        isLoading = false
-                                        navigator.popBackStack()
-                                        navigator.replaceCurrent(DownloadModelDestination)
-                                    }
-
-                                    is AtpResponse.Failure -> {
-                                        val error = result.error
-                                        val errorMsg =
-                                            error?.message ?: "Login failed: An error occurred."
-                                        Log.w(
-                                            "LoginRoute",
-                                            "Login failed: ${error?.error} - $errorMsg"
-                                        )
-                                        errorMessage = errorMsg
-                                        isLoading = false
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("LoginRoute", "Login failed with exception", e)
-                                errorMessage =
-                                    "Login failed: ${e.localizedMessage ?: "An unexpected error occurred"}"
-                                isLoading = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Login")
+            Button(
+                onClick = {
+                    val trimmed = handle.trim()
+                    Log.d("LoginRoute", "Starting OAuth for handle: $trimmed")
+                    authViewModel.startOAuthFlow(trimmed)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = handle.isNotBlank() && !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
                 }
-                OutlinedButton(
-                    onClick = {
-                        val browserIntent = Intent(
-                            Intent.ACTION_VIEW,
-                            "https://bsky.app/settings/app-passwords".toUri()
-                        )
-                        context.startActivity(browserIntent)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Create an app password")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in new")
-                }
-                OutlinedButton(
-                    onClick = {
-                        navigator.navigate(PdsListDestination)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Create an account")
-//                    Spacer(modifier = Modifier.width(8.dp))
-//                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in new")
-                }
+                Text("Continue")
+            }
+            OutlinedButton(
+                onClick = {
+                    navigator.navigate(PdsListDestination)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Create an account")
+            }
 
-                Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Rounded.Public,
+                    "Globe",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(MaterialTheme.typography.bodySmall.toDp() + 2.dp)
+                )
                 Text(
-                    "Provider URL: ${pds?.url ?: viewModel.pds}",
+                    pds?.url ?: viewModel.pds,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

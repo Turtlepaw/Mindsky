@@ -39,6 +39,7 @@ fun PostStructure(
     density: PostDensity = PostDensity.Regular,
     onClick: (() -> Unit)? = null,
     createdAt: kotlinx.datetime.Instant,
+    showSeparator: Boolean = true,
     content: @Composable () -> Unit
 ) {
     CompositionLocalProvider(
@@ -113,13 +114,13 @@ fun PostStructure(
                     )
                 }
             }
-            HorizontalDivider(
+            if(showSeparator) HorizontalDivider(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
                         if (density == PostDensity.Expanded) Modifier.padding(horizontal = 12.dp) else Modifier
                     ),
-                thickness = 0.25.dp
+                thickness = 0.15.dp
             )
             if (density == PostDensity.Expanded) {
                 Box(

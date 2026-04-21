@@ -1,6 +1,7 @@
 package io.github.turtlepaw.mindsky.db
 
 import io.github.turtlepaw.mindsky.EngagementTypeConverter
+import io.github.turtlepaw.mindsky.workers.FeedDiscoveryWorker.FeedCandidate
 import io.objectbox.annotation.Convert
 import io.objectbox.annotation.Entity
 import io.objectbox.annotation.Id
@@ -53,6 +54,18 @@ data class Engagement(
 data class FeedInterest(
     @Id var id: Long = 0,
     var hashtag: String,
+)
+
+@Entity
+data class SuggestedFeed(
+    @Id var id: Long = 0,
+    var uri: String,
+    var explanation: String,
+    var finalScore: Float,
+    val similarityScore: Float,
+    val matchedClusterId: Long,
+    val contentFreshness: Float,
+    val postFrequency: Float,
 )
 
 enum class EngagementType {

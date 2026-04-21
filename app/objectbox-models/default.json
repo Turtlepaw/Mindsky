@@ -256,17 +256,76 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "7:5373658160006945354",
+      "lastPropertyId": "8:7053729092847705348",
+      "name": "SuggestedFeed",
+      "properties": [
+        {
+          "id": "1:8112765430784823372",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2139546998908813771",
+          "name": "uri",
+          "type": 9
+        },
+        {
+          "id": "3:7935765333484245166",
+          "name": "explanation",
+          "type": 9
+        },
+        {
+          "id": "4:6562156289481991188",
+          "name": "finalScore",
+          "type": 7
+        },
+        {
+          "id": "5:3839544830139527253",
+          "name": "similarityScore",
+          "type": 7
+        },
+        {
+          "id": "6:1741712006390450713",
+          "name": "matchedClusterId",
+          "type": 6
+        },
+        {
+          "id": "7:7422565770909222240",
+          "name": "contentFreshness",
+          "type": 7
+        },
+        {
+          "id": "8:7053729092847705348",
+          "name": "postFrequency",
+          "type": 7
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "6:294155959155184934",
+  "lastEntityId": "8:8615164724069648757",
   "lastIndexId": "0:0",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
   "modelVersionParserMinimum": 5,
-  "retiredEntityUids": [],
+  "retiredEntityUids": [
+    8615164724069648757
+  ],
   "retiredIndexUids": [],
-  "retiredPropertyUids": [],
+  "retiredPropertyUids": [
+    6901629477183829731,
+    99146623818053432,
+    4695630430322606520,
+    6306449247187367200,
+    6405374321143515962,
+    7960328440549417543,
+    5159208955256980775
+  ],
   "retiredRelationUids": [],
   "version": 1
 }

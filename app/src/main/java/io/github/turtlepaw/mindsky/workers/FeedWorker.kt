@@ -293,11 +293,11 @@ class FeedWorker(
 
                 updateProgressNotification(WorkStage.CONNECTING_API, 0, indeterminate = true)
                 val sessionManager = SessionManager(appContext)
-                val api = WorkerCommon.getBlueskyApi(sessionManager)
-                if (api == null) {
-                    Log.e("FeedWorker", "Bluesky API not initialized")
+                if (sessionManager.getSession() == null) {
+                    Log.e("FeedWorker", "No active session")
                     return@coroutineScope Result.failure()
                 }
+                val api = WorkerCommon.getBlueskyApi(appContext)
                 updateProgressNotification(WorkStage.CONNECTING_API, 100, indeterminate = false)
 
                 if (isStopped) {

@@ -82,7 +82,13 @@ fun CustomPds(navigator: DestinationsNavigator) {
                         level = LogLevel.HEADERS
                     }
                     defaultRequest {
-                        url.takeFrom(pdsUrl)
+                        url.takeFrom(
+                            if(pdsUrl.startsWith("http://") || pdsUrl.startsWith("https://")) {
+                                pdsUrl
+                            } else {
+                                "https://$pdsUrl"
+                            }
+                        )
                     }
                     expectSuccess = true
                 }
@@ -174,7 +180,11 @@ fun CustomPds(navigator: DestinationsNavigator) {
                 onClick = {
                     when (isConnected) {
                         ConnectionState.Connected -> {
-                            viewModel.pds = pdsUrl
+                            viewModel.pds = if (pdsUrl.startsWith("http://") || pdsUrl.startsWith("https://")) {
+                                pdsUrl
+                            } else {
+                                "https://$pdsUrl"
+                            }
                             navigator.navigate(LoginDestination)
                         }
 

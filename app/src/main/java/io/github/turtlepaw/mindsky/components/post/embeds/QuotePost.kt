@@ -15,6 +15,7 @@ import com.atproto.repo.GetRecordQueryParams
 import com.atproto.repo.StrongRef
 import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import io.github.turtlepaw.mindsky.components.ErrorMessage
 import io.github.turtlepaw.mindsky.components.post.LoadingPost
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostDensity
@@ -53,7 +54,7 @@ fun QuotePost(record: RecordViewRecordUnion.ViewRecord, navigator: DestinationsN
                     ).maybeResponse()
                     if (data != null) {
                         postRecord = data.posts.first()
-                        viewModel.addCachedPost(postRecord!!)
+                        if(data.posts.firstOrNull() != null) viewModel.addCachedPost(data.posts.first())
                     }
                 }
             } finally {
@@ -70,42 +71,15 @@ fun QuotePost(record: RecordViewRecordUnion.ViewRecord, navigator: DestinationsN
                 postRecord!!,
                 navigator,
                 showActions = false,
-                density = PostDensity.Compact
+                density = PostDensity.Compact,
+                showLabels = false
             ) {
                 navigator.navigate(FullsizePostDestination(postRecord!!.uri.atUri))
             }
         } else {
-            //TODO: show failed
+            ErrorMessage()
         }
     }
-}
-
-fun StrongRef.toGetRecordQueryParams(): GetRecordQueryParams {
-    val uriString = uri.toString().removePrefix("at://")
-
-    val firstSlashIndex = uriString.indexOf('/')
-    require(firstSlashIndex > 0) {
-        "Invalid AtUri: expected authority + path, but got: $uriString"
-    }
-
-    val authority = uriString.substring(0, firstSlashIndex) // repo (handle or DID)
-    val path = uriString.substring(firstSlashIndex + 1) // collection/rkey
-
-    val pathSegments = path.split('/')
-    require(pathSegments.size >= 2) {
-        "Invalid AtUri: expected at least collection and rkey, but got: $path"
-    }
-
-    val repo = parseAtIdentifier(authority)
-    val collection = Nsid(pathSegments[0])
-    val rkey = RKey(pathSegments[1])
-
-    return GetRecordQueryParams(
-        repo = repo,
-        collection = collection,
-        rkey = rkey,
-        cid = cid,
-    )
 }
 
 fun RecordViewRecord.toStrongRef(): StrongRef {
@@ -114,10 +88,3 @@ fun RecordViewRecord.toStrongRef(): StrongRef {
         cid = this.cid,
     )
 }
-
-fun parseAtIdentifier(value: String): AtIdentifier =
-    if (value.startsWith("did:")) {
-        Did(value) // assuming Did is a data class implementing AtIdentifier
-    } else {
-        Handle(value) // assuming Handle is a data class implementing AtIdentifier
-    }

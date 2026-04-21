@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mindsky OAuth Callback</title>
+  </head>
+  <body>
+    <p>Completing sign-in...</p>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const target = new URL("io.github.turtlepaw.mindsky://oauth/callback");
+        ["code", "state", "error", "error_description"].forEach((key) => {
+          const value = params.get(key);
+          if (value) {
+            target.searchParams.set(key, value);
+          }
+        });
+        window.location.replace(target.toString());
+      })();
+    </script>
+    <noscript>
+      JavaScript is required to complete sign-in. Copy this URL into your app.
+    </noscript>
+  </body>
+</html>

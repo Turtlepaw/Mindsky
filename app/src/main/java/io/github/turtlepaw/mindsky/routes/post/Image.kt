@@ -148,8 +148,9 @@ fun Image(navigator: DestinationsNavigator, imageUrl: String, alt: String?) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .padding(horizontal = 10.dp)
+                                .background(Color.Black.copy(alpha = 0.7f), MaterialTheme.shapes.medium)
                                 .padding(16.dp)
-                                .background(Color.Black.copy(alpha = 0.7f), CircleShape)
                                 .align(Alignment.CenterHorizontally),
                             contentAlignment = Alignment.Center
                         ) {

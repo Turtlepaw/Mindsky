@@ -13,9 +13,16 @@
     <!--  General  -->
     <string name="blocked">Blocked</string>
     <string name="post">Post</string>
+    <string name="posts">Posts</string>
     <string name="followers">Followers</string>
     <string name="following">Following</string>
+    <string name="failed_to_load">Failed to load</string>
 
+    <!--  Composer -->
+    <string name="composer_title">New Post</string>
+    <string name="composer_hint">What\'s on your mind?</string>
+    <string name="composer_replying_to">Replying to %s</string>
+    
     <!--  Settings  -->
     <string name="settings_title">Settings</string>
     <string name="interest_sources">Interest Sources</string>
@@ -31,6 +38,14 @@
     <string name="dark_theme_dark_description">Enable pure black for dark mode</string>
     <string name="show_avatar_labelers">Show labeler avatars</string>
     <string name="show_avatar_labelers_description">Shows labeler\'s avatars next to labels</string>
+    <string name="catppuccin_theme">Catppuccin Theme</string>
+    <string name="catppuccin_theme_description">Use the Catppuccin palette</string>
+    <string name="catppuccin_variant">Dark Mode Variant</string>
+    <string name="catppuccin_variant_mocha">Mocha</string>
+    <string name="catppuccin_variant_frappe">Frappé</string>
+    <string name="catppuccin_variant_macchiato">Macchiato</string>
+    <string name="catppuccin_accent">Accent Color</string>
+    <string name="catppuccin_accent_description">Select the primary accent color</string>
 
     <!--  Interest clusters  -->
     <string name="interest_clusters">Interest Clusters</string>

@@ -5,15 +5,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Lightbulb
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -25,11 +30,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,17 +45,21 @@ import app.bsky.feed.PostView
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.FullsizePostDestination
+import com.ramcosta.composedestinations.generated.destinations.InitialOnboardingDestination
+import com.ramcosta.composedestinations.generated.destinations.LoginDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.github.turtlepaw.mindsky.components.Avatar
-import io.github.turtlepaw.mindsky.components.post.InsightType
 import io.github.turtlepaw.mindsky.components.post.PostComponent
 import io.github.turtlepaw.mindsky.components.post.PostInsightsContext
 import io.github.turtlepaw.mindsky.db.Engagement
 import io.github.turtlepaw.mindsky.db.ObjectBox
 import io.github.turtlepaw.mindsky.di.LocalMindskyApi
 import io.github.turtlepaw.mindsky.di.LocalProfileModel
+import io.github.turtlepaw.mindsky.di.LocalScrollToTop
+import io.github.turtlepaw.mindsky.replaceCurrent
 import io.github.turtlepaw.mindsky.utils.ApiUtils.fetchChunkedPosts
 import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -56,6 +67,24 @@ import io.github.turtlepaw.mindsky.viewmodels.ProfileUiState
 fun MyProfile(navigator: DestinationsNavigator) {
     var likes by remember { mutableStateOf<List<Pair<Engagement?, PostView>>?>(null) }
     val api = LocalMindskyApi.current
+    val listState = rememberLazyListState()
+    val scrollToTopHandler = LocalScrollToTop.current
+    val coroutineScope = rememberCoroutineScope()
+
+    DisposableEffect(listState) {
+        val handler: () -> Unit = {
+            coroutineScope.launch {
+                listState.animateScrollToItem(0)
+            }
+            Unit
+        }
+        scrollToTopHandler.value = handler
+        onDispose {
+            if (scrollToTopHandler.value === handler) {
+                scrollToTopHandler.value = null
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val box = ObjectBox.store.boxFor(Engagement::class.java)
@@ -88,6 +117,7 @@ fun MyProfile(navigator: DestinationsNavigator) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
+            state = listState,
         ) {
             item {
                 when (profileUiState) {
@@ -123,6 +153,24 @@ fun MyProfile(navigator: DestinationsNavigator) {
                             )
                         }
                     }
+                }
+            }
+            item {
+                Button(
+                    onClick = {
+                        navigator.popBackStack()
+                        navigator.replaceCurrent(InitialOnboardingDestination)
+                    },
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.Logout,
+                        contentDescription = "Logout"
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Sign out")
                 }
             }
             item {
@@ -167,13 +215,13 @@ fun MyProfile(navigator: DestinationsNavigator) {
                         it.second,
                         navigator,
                         reason = null,
-                        discoveryContext = { modifier ->
-                            PostInsightsContext(
-                                it.first?.embedding?.first()?.toDouble() ?: 0.0,
-                                InsightType.Vector,
-                                modifier
-                            )
-                        },
+//                        discoveryContext = { modifier ->
+//                            PostInsightsContext(
+//                                it.first?.embedding?.first()?.toDouble() ?: 0.0,
+//                                InsightType.Vector,
+//                                modifier
+//                            )
+                        //},
                     ) {
                         navigator.navigate(FullsizePostDestination(it.second.uri.atUri))
                     }

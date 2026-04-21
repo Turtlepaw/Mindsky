@@ -1,0 +1,19 @@
+{
+  "client_id": "https://turtlepaw.github.io/mindsky/client-metadata.json",
+  "client_name": "Mindsky",
+  "redirect_uris": [
+    "https://turtlepaw.github.io/mindsky/oauth/callback",
+    "io.github.turtlepaw.mindsky://oauth/callback"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "scope": "atproto transition:generic",
+  "token_endpoint_auth_method": "none",
+  "application_type": "native",
+  "dpop_bound_access_tokens": true
+}

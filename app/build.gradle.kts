@@ -1,10 +1,11 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
     id("com.google.devtools.ksp") version "2.2.0-2.0.2"
     id("io.objectbox")
     kotlin("plugin.serialization") version "2.1.20"
+    alias(libs.plugins.compose.compiler)
+    //id("sh.christian.ozone.generator") version "0.3.3"
 }
 
 android {
@@ -44,6 +45,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.browser)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -79,7 +81,6 @@ dependencies {
     implementation(libs.model2vec)
 
     implementation(libs.okhttp)
-    api(libs.bluesky)
     implementation(libs.gson)
     implementation(libs.androidx.security.crypto)
     //implementation(project(":atproto-authentication"))
@@ -98,9 +99,32 @@ dependencies {
 
     implementation(libs.kotlinx.serialization.json)
 
-    implementation("io.sanghun:compose-video:1.2.0")
-    implementation("androidx.media3:media3-exoplayer:1.7.1") // [Required] androidx.media3 ExoPlayer dependency
-    implementation("androidx.media3:media3-session:1.7.1") // [Required] MediaSession Extension dependency
-    implementation("androidx.media3:media3-ui:1.7.1") // [Required] Base Player UI
-    implementation("androidx.media3:media3-exoplayer-hls:1.7.1")
+    implementation(libs.compose.video)
+
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.media3.exoplayer.hls)
+
+    // Store library for caching and state management
+    implementation(project(":fetch_and_cache"))
+
+    //lexicons(fileTree("lexicons") { include("**/*.json") })
+    //api(libs.oauth)
+    api(libs.bluesky)
 }
+
+//lexicons {
+//    namespace.set("sh.tangled")
+//
+//    defaults {
+//        generateUnknownsForSealedTypes.set(true)
+//        generateUnknownsForEnums.set(true)
+//    }
+//
+//    generateApi("TangledApi") {
+//        packageName.set("sh.tangled")
+//        withKtorImplementation("XrpcTangledApi")
+//        returnType.set(ApiReturnType.Response)
+//    }
+//}

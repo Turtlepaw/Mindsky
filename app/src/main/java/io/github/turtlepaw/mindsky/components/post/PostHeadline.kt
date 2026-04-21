@@ -1,7 +1,9 @@
 package io.github.turtlepaw.mindsky.components.post
 
-import android.util.Log
+import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,28 +15,48 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.bsky.actor.ProfileViewBasic
 import app.bsky.labeler.GetServicesResponseViewUnion
+import com.atproto.label.Label
+import com.ramcosta.composedestinations.generated.destinations.ProfileDestination
 import io.github.turtlepaw.mindsky.R
 import io.github.turtlepaw.mindsky.components.Avatar
 import io.github.turtlepaw.mindsky.di.LocalLabelManager
+import io.github.turtlepaw.mindsky.di.LocalNavController
 import io.github.turtlepaw.mindsky.preferences.AppPrefs
 import io.github.turtlepaw.mindsky.preferences.rememberPreference
 import io.github.turtlepaw.mindsky.utils.toRelativeTimeString
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 
 private fun String.nullable(): String? {
@@ -46,80 +68,167 @@ private fun String.nullable(): String? {
 }
 
 @Composable
-fun PostHeadline(timestamp: Instant, author: ProfileViewBasic, density: PostDensity) {
+fun PostHeadline(timestamp: Instant, author: ProfileViewBasic, density: PostDensity, showLabels: Boolean = false) {
+    Column {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f)) {
+                Column {
+                    if (density == PostDensity.Expanded) {
+                        Column {
+                            AuthorNameWithBadges(author)
+                            Text(
+                                text = "@${author.handle.handle}",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else {
+                        Row {
+                            AuthorNameWithBadges(author)
+                            if (author.verification?.verifications?.isNotEmpty() != true) {
+                                Spacer(modifier = Modifier.size(5.dp))
+                            }
+                            Text(
+                                text = "@${author.handle.handle}",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+
+                    if(showLabels && density != PostDensity.Expanded) Labelers(author.labels)
+                }
+            }
+
+            Spacer(modifier = Modifier.width(5.dp))
+
+            Text(
+                text = timestamp.toRelativeTimeString(),
+                style = MaterialTheme.typography.titleSmall.copy(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun Labelers(labels: List<Label>, large: Boolean = false){
+    val nav = LocalNavController.current
     val labelManager = LocalLabelManager.current
     val labelers by labelManager.labelersDefinitionFlow.collectAsState()
 
-    LaunchedEffect(labelers) {
-        Log.d("PostHeadline", "Labels updated: ${labelers.size}")
-    }
+    val sheetState = rememberModalBottomSheetState()
+    var focusedLabel by remember { mutableStateOf<Label?>(null) }
+    val scope = rememberCoroutineScope()
 
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.weight(1f)) {
-            Column {
-                if (density == PostDensity.Expanded) {
-                    Column {
-                        AuthorNameWithVerification(author)
-                        Text(
-                            text = "@${author.handle.handle}",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                } else {
-                    Row {
-                        AuthorNameWithVerification(author)
-                        if (author.verification?.verifications?.isNotEmpty() != true) {
-                            Spacer(modifier = Modifier.size(5.dp))
-                        }
-                        Text(
-                            text = "@${author.handle.handle}",
-                            style = MaterialTheme.typography.titleSmall.copy(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        for (label in labels.filter { !hiddenLabels.contains(it.`val`) }) {
+            val resolvedLabel = labelers[label.src.did]
 
-                FlowRow {
-                    for (label in author.labels.filter { it.`val` != "!no-unauthenticated" }) {
-                        val resolvedLabel = labelers[label.src.did]
-
-                        if (resolvedLabel != null) {
-                            LabelComponent(
-                                label = resolvedLabel.getDisplayName(label.`val`),
-                                avatar = resolvedLabel.getAvatar()
-                            )
-                        } else {
-                            // Fallback for unresolved labels
-                            LabelComponent(
-                                label = label.`val`,
-                                null
-                            )
-                        }
-                    }
-                }
+            if (resolvedLabel != null) {
+                LabelComponent(
+                    label = resolvedLabel.getDisplayName(label.`val`),
+                    avatar = resolvedLabel.getAvatar(),
+                    onClick = {
+                        focusedLabel = label
+                    },
+                    isLarge = large
+                )
+            } else {
+                // Fallback for unresolved labels
+                LabelComponent(
+                    label = label.`val`,
+                    null,
+                    onClick = {
+                        focusedLabel = label
+                    },
+                    isLarge = large
+                )
             }
         }
+    }
 
-        Spacer(modifier = Modifier.width(5.dp))
 
-        Text(
-            text = timestamp.toRelativeTimeString(),
-            style = MaterialTheme.typography.titleSmall.copy(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-            )
-        )
+    if (focusedLabel != null) {
+        val resolvedLabel = labelers[focusedLabel!!.src.did]!!
+        ModalBottomSheet(
+            onDismissRequest = {
+                focusedLabel = null
+            },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(26.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    resolvedLabel.getDisplayName(
+                        focusedLabel!!.`val`
+                    ),
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                val desciription = resolvedLabel.getDescription(
+                    focusedLabel!!.`val`
+                )
+
+                if(desciription != null){
+                    Text(
+                        desciription,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                val handle = resolvedLabel.getCreatorHandle() ?: "Unknown"
+
+                val annotatedString = buildAnnotatedString {
+                    append("Labeled by ")
+
+                    withLink(
+                        LinkAnnotation.Clickable(
+                            tag = "handle",
+                            styles = TextLinkStyles(
+                                style = SpanStyle(
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        ) {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                nav.navigate(
+                                    ProfileDestination(focusedLabel!!.src.did).route
+                                )
+                            }
+                        }
+                    ) {
+                        append("@$handle")
+                    }
+                }
+
+                Text(
+                    text = annotatedString,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun AuthorNameWithVerification(author: ProfileViewBasic) {
+private fun AuthorNameWithBadges(author: ProfileViewBasic) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = author.displayName?.nullable() ?: author.handle.handle,
@@ -128,32 +237,48 @@ private fun AuthorNameWithVerification(author: ProfileViewBasic) {
             overflow = TextOverflow.Ellipsis,
         )
 
+        if(author.labels.find { it.`val` == "bot" } != null){
+            Robot(Modifier.size(23.dp))
+        }
         if (author.verification?.verifications?.isNotEmpty() == true) {
             Checkmark(Modifier.size(23.dp))
         }
     }
 }
 
+val hiddenLabels = listOf(
+    "bot",
+    "!no-unauthenticated"
+)
+
 @Composable
 fun LabelComponent(
     label: String,
     avatar: String?,
-    isLarge: Boolean = false
+    isLarge: Boolean = false,
+    onClick: () -> Unit = { }
 ) {
     val showAvatar by rememberPreference(AppPrefs.ShowLabelerAvatars)
     Row(
         modifier = Modifier
-            .padding(horizontal = 4.dp, vertical = 2.dp)
+            .padding(vertical = 2.dp)
             .background(
                 color = if (isLarge) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent,
-                shape = MaterialTheme.shapes.medium
+                shape = if (isLarge) MaterialTheme.shapes.medium else CircleShape
             )
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.1f),
+                shape = if (isLarge) MaterialTheme.shapes.medium else CircleShape
+            )
+            .clip(if (isLarge) MaterialTheme.shapes.medium else CircleShape)
+            .clickable(onClick  = onClick)
             .run {
-                if (isLarge) padding(horizontal = 5.dp, vertical = 2.dp) else this
+                if (isLarge) padding(horizontal = 5.dp, vertical = 2.dp) else padding(horizontal = 5.dp)
             },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(
-            2.dp,
+            if(isLarge) 2.dp else 2.dp,
             Alignment.CenterHorizontally
         )
     ) {
@@ -172,7 +297,7 @@ fun LabelComponent(
             style = (if (isLarge) MaterialTheme.typography.labelLarge else MaterialTheme.typography.labelSmall).copy(
                 color = MaterialTheme.colorScheme.onSurface.copy(0.9f)
             ),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.padding(vertical = 2.dp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -187,6 +312,34 @@ fun GetServicesResponseViewUnion.getDisplayName(identifier: String): String {
 
         is GetServicesResponseViewUnion.Unknown -> null
     } ?: identifier
+}
+
+fun GetServicesResponseViewUnion.getDescription(identifier: String): String? {
+    return when (this) {
+        is GetServicesResponseViewUnion.LabelerView -> null
+        is GetServicesResponseViewUnion.LabelerViewDetailed -> this.value.policies.labelValueDefinitions.find { it.identifier == identifier }
+            ?.locales?.find { it.lang.tag == "en" }?.description
+
+        is GetServicesResponseViewUnion.Unknown -> null
+    }
+}
+
+fun GetServicesResponseViewUnion.getCreatorName(): String? {
+    return when (this) {
+        is GetServicesResponseViewUnion.LabelerView -> this.value.creator.displayName
+        is GetServicesResponseViewUnion.LabelerViewDetailed -> this.value.creator.displayName
+
+        is GetServicesResponseViewUnion.Unknown -> null
+    }
+}
+
+fun GetServicesResponseViewUnion.getCreatorHandle(): String? {
+    return when (this) {
+        is GetServicesResponseViewUnion.LabelerView -> this.value.creator.handle.handle
+        is GetServicesResponseViewUnion.LabelerViewDetailed -> this.value.creator.handle.handle
+
+        is GetServicesResponseViewUnion.Unknown -> null
+    }
 }
 
 fun GetServicesResponseViewUnion.getAvatar(): String? {
@@ -206,5 +359,16 @@ fun Checkmark(modifier: Modifier) {
         tint = MaterialTheme.colorScheme.primary,
         modifier = modifier
             .padding(horizontal = 2.dp)
+    )
+}
+
+@Composable
+fun Robot(modifier: Modifier){
+    Icon(
+        painterResource(R.drawable.ic_bot),
+        contentDescription = "Bot",
+        tint = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
+            .padding(start = 2.dp)
     )
 }

@@ -1,5 +1,6 @@
 package io.github.turtlepaw.mindsky.components
 
+import android.graphics.drawable.VectorDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -9,13 +10,17 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.TextAutoSizeDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -32,6 +37,7 @@ fun Avatar(
         AsyncImage(
             model = avatarUrl,
             contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
             modifier = modifier
                 .clip(clip)
                 .then(
@@ -42,6 +48,41 @@ fun Avatar(
                     } else Modifier
                 )
         )
+    } else {
+        FallbackAvatar(
+            modifier = modifier.then(
+                if (onClick != null)
+                    Modifier.clickable(onClick = onClick)
+                else Modifier
+            ),
+            contentDescription = contentDescription,
+            shape = clip,
+        )
+    }
+}
+
+@Composable
+fun Avatar(
+    modifier: Modifier = Modifier,
+    drawable: ImageVector?,
+    contentDescription: String?,
+    clip: Shape = CircleShape,
+    color: Color = MaterialTheme.colorScheme.primary,
+    onColor: Color = MaterialTheme.colorScheme.onPrimary,
+    onClick: (() -> Unit)? = null,
+) {
+    if (drawable != null) {
+        Box(
+            modifier = modifier
+                .background(color, clip),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                drawable,
+                contentDescription = contentDescription,
+                tint = onColor
+            )
+        }
     } else {
         FallbackAvatar(
             modifier = modifier.then(

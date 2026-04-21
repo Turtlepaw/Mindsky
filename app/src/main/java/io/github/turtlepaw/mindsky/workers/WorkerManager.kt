@@ -49,12 +49,13 @@ object WorkerManager {
     fun WorkManager.enqueueImmediateWorkers(
         existingWorkPolicy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE
     ) {
-        TimedWorkType.entries.forEach {
-            attachWorkRequests(it, existingWorkPolicy)
-        }
+//        TimedWorkType.entries.forEach {
+//
+//        }
+        attachWorkRequests(existingWorkPolicy)
     }
 
-    private fun WorkManager.attachWorkRequests(it: TimedWorkType, existingWorkPolicy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE) {
+    private fun WorkManager.attachWorkRequests(existingWorkPolicy: ExistingWorkPolicy = ExistingWorkPolicy.REPLACE) {
         val signalProcessingRequest =
             buildOneTimeWorkRequest<SignalProcessingWorker>()
                 .setInputData(
@@ -64,10 +65,10 @@ object WorkerManager {
                 )
                 .build() // No delay for SignalProcessingWorker
         val feedWorkerRequest =
-            getFeedWorkerRequest(8) // FeedWorker will start 10 minutes AFTER SignalProcessingWorker completes
+            getFeedWorkerRequest(0) // FeedWorker will start 10 minutes AFTER SignalProcessingWorker completes
 
         this.beginUniqueWork(
-            it.name + "_ImmediateDataSyncChain", // A new unique name for this specific chain
+            "ImmediateDataSyncChain", // A new unique name for this specific chain
             existingWorkPolicy, // This policy applies to the entire chain
             signalProcessingRequest
         )
@@ -109,7 +110,7 @@ object WorkerManager {
     fun WorkManager.getFeedWorkerRequest(
         delayMinutes: Long = 0
     ): OneTimeWorkRequest {
-        return buildOneTimeWorkRequest<FeedWorker>(delayMinutes)
+        return buildOneTimeWorkRequest<FeedDiscoveryWorker>(delayMinutes)
             .build()
     }
 

@@ -343,11 +343,7 @@ class SignalProcessingWorker(
                     return Result.failure()
                 }
 
-                val blueskyApi = WorkerCommon.getBlueskyApi(sessionManager)
-                if (blueskyApi !is AuthenticatedXrpcBlueskyApi) {
-                    Log.e(logTag, "Bluesky API is not authenticated, cannot proceed.")
-                    return Result.failure()
-                }
+                val blueskyApi = WorkerCommon.getBlueskyApi(appContext)
 
                 if (isTimeRunningOut()) {
                     Log.w(logTag, "Time limit reached before main processing")

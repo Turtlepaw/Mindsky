@@ -89,7 +89,7 @@ fun TopBarInteractiveElements(
             Icon(
                 painter = painterResource(R.drawable.ic_mindsky),
                 contentDescription = "Mindsky icon",
-                tint = MaterialTheme.colorScheme.secondary,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .size(30.dp)
                     .scale(scale)

@@ -5,5 +5,7 @@ data class UserSession(
     val handle: String,
     val accessToken: String,
     val refreshToken: String,
-    val host: String
+    val tokenType: String = "DPoP",
+    val expiresAt: Long? = null,
+    val pdsUrl: String = ""
 )
