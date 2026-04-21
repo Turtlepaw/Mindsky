@@ -38,8 +38,8 @@ class OAuthClient(
 
     companion object {
         private const val TAG = "OAuthClient"
-        private const val REDIRECT_URI = "https://turtlepaw.github.io/mindsky/oauth/callback"
-        private const val CLIENT_ID = "https://turtlepaw.github.io/mindsky/client-metadata.json"
+        private const val REDIRECT_URI = "https://marigold.kittens.fyi/oauth/callback"
+        private const val CLIENT_ID = "https://marigold.kittens.fyi/client-metadata.json"
     }
 
     private val json = Json {
