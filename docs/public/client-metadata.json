@@ -3,7 +3,7 @@
   "client_name": "Mindsky",
   "redirect_uris": [
     "https://marigold.kittens.fyi/oauth/callback",
-    "io.github.turtlepaw.mindsky:/oauth/callback"
+    "fyi.kittens.marigold:/oauth/callback"
   ],
   "grant_types": ["authorization_code", "refresh_token"],
   "response_types": ["code"],
