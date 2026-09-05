@@ -1,6 +1,6 @@
 {
   "client_id": "https://aster.kittens.fyi/client-metadata.json",
-  "client_name": "Mindsky",
+  "client_name": "Aster",
   "redirect_uris": [
     "https://aster.kittens.fyi/oauth/callback",
     "fyi.kittens.bsky:/oauth/callback"
